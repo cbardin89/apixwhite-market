@@ -285,6 +285,23 @@
             width: auto;
             cursor: pointer;
         }
+
+        .minimal-mode {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+
+        .minimal-mode label {
+            margin: 0;
+            text-transform: none;
+            color: #856404;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
         
         @media (max-width: 968px) {
             .content {
@@ -326,18 +343,23 @@
                         <button class="method-btn" data-method="OPTIONS">OPTIONS</button>
                     </div>
                 </div>
+
+                <div class="minimal-mode">
+                    <label>
+                        <input type="checkbox" id="minimalMode" checked>
+                        <strong>⚡ Minimal Mode (Recommended)</strong> - Only sends Content-Type header to avoid preflight issues
+                    </label>
+                </div>
                 
                 <div class="credentials-toggle">
                     <input type="checkbox" id="includeCredentials" checked>
                     <label for="includeCredentials" style="margin: 0; text-transform: none;">Include Credentials (Send Cookies)</label>
                 </div>
                 
-                <div class="form-group">
-                    <label>Custom Headers (JSON Format)</label>
-                    <textarea id="headers" placeholder='{"Content-Type": "application/json", "Authorization": "Bearer YOUR_TOKEN"}'>{
-  "Content-Type": "application/json",
-  "Accept": "*/*",
-  "X-Accept-Language": "en_US"
+                <div class="form-group" id="headersGroup">
+                    <label>Custom Headers (JSON Format) - Disabled in Minimal Mode</label>
+                    <textarea id="headers" placeholder='{"Content-Type": "application/json"}' disabled>{
+  "Content-Type": "application/json"
 }</textarea>
                 </div>
                 
@@ -349,7 +371,7 @@
                         <button class="template-btn" data-template="user">User Query</button>
                         <button class="template-btn" data-template="blank">Clear</button>
                     </div>
-                    <textarea id="body" placeholder='{"query": "query { __typename }", "variables": {}, "operationName": null}' rows="10">{
+                    <textarea id="body" placeholder='{"query": "query { __typename }"}' rows="10">{
   "query": "query { __typename }"
 }</textarea>
                 </div>
@@ -387,8 +409,17 @@
         const headersInput = document.getElementById('headers');
         const bodyInput = document.getElementById('body');
         const includeCredentialsCheckbox = document.getElementById('includeCredentials');
+        const minimalModeCheckbox = document.getElementById('minimalMode');
         const templateButtons = document.querySelectorAll('.template-btn');
         
+        // Minimal mode toggle
+        minimalModeCheckbox.addEventListener('change', (e) => {
+            headersInput.disabled = e.target.checked;
+            if (e.target.checked) {
+                headersInput.value = '{\n  "Content-Type": "application/json"\n}';
+            }
+        });
+
         // Method selector
         methodButtons.forEach(btn => {
             btn.addEventListener('click', () => {
@@ -454,6 +485,7 @@
         sendBtn.addEventListener('click', async () => {
             const endpoint = endpointInput.value.trim();
             const includeCredentials = includeCredentialsCheckbox.checked;
+            const minimalMode = minimalModeCheckbox.checked;
             
             if (!endpoint) {
                 alert('Please enter an endpoint URL');
@@ -462,13 +494,22 @@
             
             // Parse headers
             let headers = {};
-            try {
-                if (headersInput.value.trim()) {
-                    headers = JSON.parse(headersInput.value);
+            
+            if (minimalMode) {
+                // MINIMAL MODE: Only Content-Type header
+                headers = {
+                    'Content-Type': 'application/json'
+                };
+            } else {
+                // Custom headers mode
+                try {
+                    if (headersInput.value.trim()) {
+                        headers = JSON.parse(headersInput.value);
+                    }
+                } catch (e) {
+                    alert('Invalid JSON in headers field: ' + e.message);
+                    return;
                 }
-            } catch (e) {
-                alert('Invalid JSON in headers field: ' + e.message);
-                return;
             }
             
             // Parse body
@@ -621,7 +662,9 @@
 - Network connectivity issues
 - Invalid endpoint URL
 - Server not responding
-- Mixed content (HTTP/HTTPS) blocking</pre>
+- Mixed content (HTTP/HTTPS) blocking
+- Extra headers triggering complex preflight
+- Try enabling "Minimal Mode" above</pre>
                     </div>
                 </div>
             `;
