@@ -302,6 +302,23 @@
             align-items: center;
             gap: 8px;
         }
+
+        .preflight-mode {
+            background: #d1ecf1;
+            border: 2px solid #17a2b8;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+
+        .preflight-mode label {
+            margin: 0;
+            text-transform: none;
+            color: #0c5460;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
         
         @media (max-width: 968px) {
             .content {
@@ -342,6 +359,13 @@
                         <button class="method-btn" data-method="PATCH">PATCH</button>
                         <button class="method-btn" data-method="OPTIONS">OPTIONS</button>
                     </div>
+                </div>
+
+                <div class="preflight-mode">
+                    <label>
+                        <input type="checkbox" id="preflightMode" checked>
+                        <strong>🚀 Auto Preflight (Recommended)</strong> - Automatically sends OPTIONS request first to warm up CORS
+                    </label>
                 </div>
 
                 <div class="minimal-mode">
@@ -410,6 +434,7 @@
         const bodyInput = document.getElementById('body');
         const includeCredentialsCheckbox = document.getElementById('includeCredentials');
         const minimalModeCheckbox = document.getElementById('minimalMode');
+        const preflightModeCheckbox = document.getElementById('preflightMode');
         const templateButtons = document.querySelectorAll('.template-btn');
         
         // Minimal mode toggle
@@ -481,11 +506,47 @@
             });
         });
         
+        // Send preflight OPTIONS request
+        async function sendPreflight(endpoint, headers) {
+            try {
+                const headerKeys = Object.keys(headers).filter(k => k.toLowerCase() !== 'content-type');
+                const requestHeaders = headerKeys.length > 0 ? headerKeys.join(',') : 'content-type';
+                
+                const preflightResponse = await fetch(endpoint, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Access-Control-Request-Method': currentMethod,
+                        'Access-Control-Request-Headers': requestHeaders
+                    }
+                });
+                
+                console.log('✅ Preflight successful:', preflightResponse.status);
+                
+                const preflightHeaders = {};
+                preflightResponse.headers.forEach((value, key) => {
+                    preflightHeaders[key] = value;
+                });
+                
+                return {
+                    success: true,
+                    status: preflightResponse.status,
+                    headers: preflightHeaders
+                };
+            } catch (error) {
+                console.log('❌ Preflight failed:', error.message);
+                return {
+                    success: false,
+                    error: error.message
+                };
+            }
+        }
+        
         // Send request
         sendBtn.addEventListener('click', async () => {
             const endpoint = endpointInput.value.trim();
             const includeCredentials = includeCredentialsCheckbox.checked;
             const minimalMode = minimalModeCheckbox.checked;
+            const preflightMode = preflightModeCheckbox.checked;
             
             if (!endpoint) {
                 alert('Please enter an endpoint URL');
@@ -533,6 +594,30 @@
                 </div>
             `;
             
+            let preflightResult = null;
+            
+            // Send preflight if enabled and not already OPTIONS
+            if (preflightMode && currentMethod !== 'OPTIONS') {
+                responseContainer.innerHTML = `
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Sending preflight OPTIONS request...</p>
+                    </div>
+                `;
+                
+                preflightResult = await sendPreflight(endpoint, headers);
+                
+                // Wait a moment for CORS to settle
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                responseContainer.innerHTML = `
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Sending ${currentMethod} request...</p>
+                    </div>
+                `;
+            }
+            
             // Prepare fetch options
             const fetchOptions = {
                 method: currentMethod,
@@ -575,7 +660,8 @@
                     headers: responseHeaders,
                     body: responseBody,
                     duration: duration,
-                    url: response.url
+                    url: response.url,
+                    preflightResult: preflightResult
                 });
                 
             } catch (error) {
@@ -585,7 +671,8 @@
                 displayError({
                     error: error.message,
                     stack: error.stack,
-                    duration: duration
+                    duration: duration,
+                    preflightResult: preflightResult
                 });
             } finally {
                 sendBtn.disabled = false;
@@ -597,7 +684,27 @@
             const statusClass = data.status >= 200 && data.status < 300 ? 'status-success' : 
                                data.status >= 400 ? 'status-error' : 'status-info';
             
+            let preflightSection = '';
+            if (data.preflightResult) {
+                const preflightClass = data.preflightResult.success ? 'status-success' : 'status-error';
+                preflightSection = `
+                    <div class="response-section">
+                        <div class="response-header">
+                            Preflight (OPTIONS) Result
+                            <span class="status-badge ${preflightClass}">
+                                ${data.preflightResult.success ? '✅ Success' : '❌ Failed'}
+                            </span>
+                        </div>
+                        <div class="response-content">
+                            <pre>${escapeHtml(JSON.stringify(data.preflightResult, null, 2))}</pre>
+                        </div>
+                    </div>
+                `;
+            }
+            
             responseContainer.innerHTML = `
+                ${preflightSection}
+                
                 <div class="response-section">
                     <div class="response-header">
                         Status
@@ -632,7 +739,27 @@
         }
         
         function displayError(data) {
+            let preflightSection = '';
+            if (data.preflightResult) {
+                const preflightClass = data.preflightResult.success ? 'status-success' : 'status-error';
+                preflightSection = `
+                    <div class="response-section">
+                        <div class="response-header">
+                            Preflight (OPTIONS) Result
+                            <span class="status-badge ${preflightClass}">
+                                ${data.preflightResult.success ? '✅ Success' : '❌ Failed'}
+                            </span>
+                        </div>
+                        <div class="response-content">
+                            <pre>${escapeHtml(JSON.stringify(data.preflightResult, null, 2))}</pre>
+                        </div>
+                    </div>
+                `;
+            }
+            
             responseContainer.innerHTML = `
+                ${preflightSection}
+                
                 <div class="response-section">
                     <div class="response-header">
                         Error
@@ -664,7 +791,8 @@
 - Server not responding
 - Mixed content (HTTP/HTTPS) blocking
 - Extra headers triggering complex preflight
-- Try enabling "Minimal Mode" above</pre>
+- Try enabling "Minimal Mode" above
+- Preflight may have failed - check above</pre>
                     </div>
                 </div>
             `;
