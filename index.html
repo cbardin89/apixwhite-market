@@ -278,6 +278,142 @@
         }
         .vars-editor:focus { border-color: var(--accent); }
 
+        /* Headers Editor */
+        .header-rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+
+        .header-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .header-row input {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 6px 10px;
+            color: var(--text);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.72rem;
+            outline: none;
+            transition: border-color 0.15s;
+            width: 100%;
+        }
+        .header-row input:focus { border-color: var(--accent); }
+        .header-row input.key-input  { color: var(--accent); }
+        .header-row input.val-input  { color: var(--accent3); }
+
+        .header-row .del-btn {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--accent2);
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: 'Share Tech Mono', monospace;
+            letter-spacing: 0;
+            text-transform: none;
+            line-height: 1;
+            transition: background 0.15s;
+            flex-shrink: 0;
+        }
+        .header-row .del-btn:hover { background: rgba(255,62,62,0.15); }
+
+        .headers-notice {
+            font-size: 0.63rem;
+            color: var(--dim);
+            margin-bottom: 8px;
+            line-height: 1.5;
+            border-left: 2px solid var(--border);
+            padding-left: 8px;
+        }
+
+        .toggle-section {
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--dim);
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+            margin-top: 12px;
+            margin-bottom: 8px;
+        }
+        .toggle-section:hover { color: var(--text); }
+        .toggle-section .arrow { transition: transform 0.2s; display: inline-block; }
+        .toggle-section.open .arrow { transform: rotate(90deg); }
+        .collapsible { overflow: hidden; max-height: 0; transition: max-height 0.3s ease; }
+        .collapsible.open { max-height: 800px; }
+
+        /* Headers Editor */
+        .hdr-table { width: 100%; border-collapse: collapse; }
+        .hdr-table td { padding: 3px 4px; }
+        .hdr-table td:last-child { width: 32px; }
+
+        .hdr-input {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 5px 8px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.72rem;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .hdr-input:focus { border-color: var(--accent); }
+        .hdr-input.hdr-key { color: var(--accent); }
+        .hdr-input.hdr-val { color: var(--accent3); }
+
+        .hdr-del {
+            background: transparent;
+            border: 1px solid #2a1a1a;
+            color: var(--accent2);
+            border-radius: 3px;
+            width: 26px; height: 26px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s;
+            font-family: monospace;
+            padding: 0;
+            letter-spacing: 0;
+            text-transform: none;
+        }
+        .hdr-del:hover { background: rgba(255,62,62,0.15); border-color: var(--accent2); }
+
+        .hdr-notice {
+            font-size: 0.63rem;
+            color: var(--dim);
+            border-left: 2px solid var(--border);
+            padding-left: 8px;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .collapsible-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+            padding: 8px 0 8px 0;
+            border-top: 1px solid var(--border);
+            margin-top: 10px;
+            font-size: 0.7rem;
+            color: var(--dim);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .collapsible-header:hover { color: var(--text); }
+        .collapsible-header .arrow { transition: transform 0.2s; display: inline-block; font-style: normal; }
+        .collapsible-header.open .arrow { transform: rotate(90deg); }
+        .collapsible-body { overflow: hidden; max-height: 0; transition: max-height 0.3s ease; }
+        .collapsible-body.open { max-height: 600px; }
+
         /* Buttons */
         .btn-row {
             display: flex;
@@ -441,6 +577,42 @@
         <div class="stat-card total">  <div class="label">Total Queries</div><div class="value" id="stat-total">0</div></div>
     </div>
 
+    <!-- Global Headers Panel -->
+    <div class="panel" style="margin-bottom:20px;">
+        <div class="panel-header">
+            <span>🔧 Global Request Headers</span>
+            <span style="color:var(--dim);font-size:0.65rem;font-family:'Share Tech Mono';font-weight:400;">applied to every request · browser may override some</span>
+        </div>
+        <div class="panel-body">
+            <div class="headers-notice">
+                These headers are merged into all fetch calls. <code>Content-Type</code> and <code>credentials</code> are always set internally.
+                Headers the browser controls (e.g. <code>Cookie</code>, <code>User-Agent</code>, <code>Origin</code>) cannot be set from JS — they are sent automatically via <code>credentials: include</code>.
+                Use this to inject custom tokens, <code>Authorization: Bearer …</code>, <code>x-api-key</code>, etc.
+            </div>
+            <div class="header-rows" id="global-header-rows"></div>
+            <button class="btn-ghost" style="margin-top:4px;font-size:0.75rem;padding:6px 14px;" onclick="addHeaderRow('global-header-rows')">＋ Add Header</button>
+        </div>
+    </div>
+
+    <!-- Global Request Headers -->
+    <div class="panel" style="margin-bottom:20px;">
+        <div class="panel-header">
+            <span>🔧 Global Request Headers</span>
+            <span style="font-size:0.65rem;color:var(--dim);font-family:'Share Tech Mono';font-weight:400;letter-spacing:1px;text-transform:none;">merged into every request</span>
+        </div>
+        <div class="panel-body">
+            <div class="hdr-notice">
+                These headers are sent with all requests. <strong style="color:var(--text);">Content-Type: application/json</strong> is always set automatically.
+                Browser-controlled headers (<code>Cookie</code>, <code>User-Agent</code>, <code>Origin</code>, <code>Referer</code>, <code>Sec-Fetch-*</code>) are sent automatically via <code>credentials: include</code> — you cannot set them here.
+                Use this for: <code>Authorization: Bearer &lt;accessToken&gt;</code>, <code>x-api-key</code>, custom session headers, etc.
+            </div>
+            <table class="hdr-table" id="global-headers-table">
+                <tbody id="global-headers-body"></tbody>
+            </table>
+            <button class="btn-ghost" style="margin-top:8px;font-size:0.72rem;padding:5px 12px;" onclick="addHeaderRow('global')">＋ Add Header</button>
+        </div>
+    </div>
+
     <div class="layout">
 
         <!-- LEFT: Query Selector + Custom Query -->
@@ -477,6 +649,18 @@
 
                         <label>Variables (JSON, optional)</label>
                         <textarea class="vars-editor" id="custom-vars" placeholder='{"pagination": {"first": 50}}'></textarea>
+
+                        <!-- Per-request header overrides (collapsed by default) -->
+                        <div class="collapsible-header" id="per-hdr-toggle" onclick="toggleCollapsible('per-hdr-body','per-hdr-toggle')">
+                            <span class="arrow">▶</span> Per-Request Header Overrides
+                            <span style="color:var(--dim);margin-left:auto;font-size:0.6rem;text-transform:none;letter-spacing:0;">overrides globals for this request only</span>
+                        </div>
+                        <div class="collapsible-body" id="per-hdr-body">
+                            <table class="hdr-table" id="per-headers-table">
+                                <tbody id="per-headers-body"></tbody>
+                            </table>
+                            <button class="btn-ghost" style="margin-top:6px;font-size:0.72rem;padding:5px 12px;" onclick="addHeaderRow('per')">＋ Add Override</button>
+                        </div>
 
                         <div class="btn-row">
                             <button class="btn-primary" onclick="runCustomQuery()">▶ Run Query</button>
@@ -699,7 +883,8 @@ async function checkAuth() {
             credentials: 'include',
             headers: {
                 'Content-Type': 'application/json',
-                'x-accept-language': 'en_US'
+                'x-accept-language': 'en_US',
+                ...getGlobalHeaders()
             },
             body: JSON.stringify({ query: sentinelQuery, operationName: 'AuthCheck' })
         });
@@ -765,21 +950,31 @@ async function checkAuth() {
 
 // ─── Query Execution ───────────────────────────────────────────────────────────
 
-async function executeQuery(name, query, variables = {}) {
+async function executeQuery(name, query, variables = {}, extraHeaders = {}) {
     const payload = {
         query,
         variables,
         operationName: name.replace(/\s+/g, '')
     };
 
+    // Base headers always sent
+    const baseHeaders = {
+        'Content-Type': 'application/json',
+        'x-accept-language': 'en_US'
+    };
+
+    // Merge: base → global headers panel → per-request overrides
+    const mergedHeaders = {
+        ...baseHeaders,
+        ...getGlobalHeaders(),
+        ...extraHeaders
+    };
+
     try {
         const res = await fetch(CONFIG.endpoint, {
             method: 'POST',
             credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-accept-language': 'en_US'
-            },
+            headers: mergedHeaders,
             body: JSON.stringify(payload)
         });
 
@@ -792,10 +987,16 @@ async function executeQuery(name, query, variables = {}) {
         stats.total++;
         updateStats();
 
+        // Show which headers were actually sent (minus browser-controlled ones)
+        const sentHeaders = Object.entries(mergedHeaders)
+            .map(([k,v]) => `  ${k}: ${v}`)
+            .join('\n');
+
         addResultCard({
             name,
             status:  success ? 'success' : 'fail',
-            bodyHtml: `<pre>${escHtml(JSON.stringify(data, null, 2))}</pre>`,
+            bodyHtml: `<pre>${escHtml(JSON.stringify(data, null, 2))}</pre>
+                       <pre style="color:var(--dim);font-size:0.65rem;border-top:1px solid var(--border);margin-top:0;">── Headers Sent (JS-controlled) ──\n${escHtml(sentHeaders)}</pre>`,
             meta:    `HTTP ${res.status} · ${kb.toFixed(2)} KB · ${new Date().toLocaleTimeString()}`
         });
 
@@ -848,7 +1049,8 @@ async function runCustomQuery() {
         catch { alert('Variables JSON is invalid.'); return; }
     }
 
-    await executeQuery(name, query, variables);
+    const perHeaders = getPerRequestHeaders();
+    await executeQuery(name, query, variables, perHeaders);
 }
 
 function addCustomToPresets() {
@@ -873,9 +1075,92 @@ function clearCustomEditor() {
     document.getElementById('custom-name').value  = '';
     document.getElementById('custom-query').value = '';
     document.getElementById('custom-vars').value  = '';
+    document.getElementById('per-headers-body').innerHTML = '';
 }
 
-// ─── Result Cards ─────────────────────────────────────────────────────────────
+// ─── Header Management ────────────────────────────────────────────────────────
+
+/*
+  addHeaderRow(scope) - scope is 'global' or 'per'
+  Each row: [key input] [value input] [✕ delete]
+  Browser-forbidden headers are warned but not blocked client-side
+  (the browser will silently ignore them anyway).
+*/
+function addHeaderRow(scope, key = '', val = '') {
+    const tbodyId = scope === 'global' ? 'global-headers-body' : 'per-headers-body';
+    const tbody   = document.getElementById(tbodyId);
+    const rowId   = `hdr-row-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+
+    const tr = document.createElement('tr');
+    tr.id = rowId;
+    tr.innerHTML = `
+        <td><input class="hdr-input hdr-key" placeholder="Header-Name" value="${escHtml(key)}"
+            title="Header name (e.g. Authorization, x-api-key)"
+            oninput="warnForbiddenHeader(this)"></td>
+        <td><input class="hdr-input hdr-val" placeholder="value" value="${escHtml(val)}"
+            title="Header value"></td>
+        <td><button class="hdr-del" onclick="removeHeaderRow('${rowId}')" title="Remove">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+}
+
+function removeHeaderRow(rowId) {
+    const el = document.getElementById(rowId);
+    if (el) el.remove();
+}
+
+// Read all header rows from a scope into a plain object
+function readHeaders(tbodyId) {
+    const tbody = document.getElementById(tbodyId);
+    const result = {};
+    for (const tr of tbody.querySelectorAll('tr')) {
+        const inputs = tr.querySelectorAll('input');
+        const k = inputs[0]?.value.trim();
+        const v = inputs[1]?.value.trim();
+        if (k && v) result[k] = v;
+    }
+    return result;
+}
+
+function getGlobalHeaders()     { return readHeaders('global-headers-body'); }
+function getPerRequestHeaders() { return readHeaders('per-headers-body'); }
+
+// Warn user if they try to set a browser-forbidden header
+const FORBIDDEN_HEADERS = new Set([
+    'cookie','user-agent','origin','referer','host','content-length',
+    'transfer-encoding','connection','upgrade','via','te',
+    'sec-fetch-dest','sec-fetch-mode','sec-fetch-site','sec-fetch-user',
+    'dnt','sec-gpc','accept-encoding'
+]);
+
+function warnForbiddenHeader(input) {
+    const key = input.value.trim().toLowerCase();
+    if (FORBIDDEN_HEADERS.has(key)) {
+        input.style.borderColor = 'var(--accent2)';
+        input.title = `⚠️ "${input.value}" is browser-controlled. The browser will silently ignore this — it's sent automatically via credentials:include.`;
+    } else {
+        input.style.borderColor = '';
+        input.title = 'Header name';
+    }
+}
+
+function toggleCollapsible(bodyId, headerId) {
+    const body   = document.getElementById(bodyId);
+    const header = document.getElementById(headerId);
+    body.classList.toggle('open');
+    header.classList.toggle('open');
+}
+
+// Pre-populate global headers with the known-good set from the target request
+function initDefaultHeaders() {
+    addHeaderRow('global', 'x-accept-language', 'en_US');
+    addHeaderRow('global', 'Accept', '*/*');
+    addHeaderRow('global', 'Accept-Language', 'en-US,en;q=0.9');
+    // Content-Type is always set in code — listed here for visibility only, will be overridden
+    // Authorization left blank — fill in after running auth_token mutation
+}
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
 
 function addResultCard({ name, status, bodyHtml, meta }) {
     const empty = document.getElementById('empty-state');
@@ -945,7 +1230,28 @@ function escHtml(str) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
+
+// Add AuthToken mutation as first preset (the key handshake)
+PRESETS['auth_token'] = {
+    name: "Auth Token (cookie → accessToken)",
+    badge: "AUTH",
+    query: `mutation AuthToken {
+    auth_token {
+        accessToken
+    }
+}`,
+    variables: {}
+};
+
+// Re-order so auth_token appears first — rebuild with it prepended
+const reordered = { auth_token: PRESETS['auth_token'] };
+for (const [k,v] of Object.entries(PRESETS)) {
+    if (k !== 'auth_token') reordered[k] = v;
+}
+Object.assign(PRESETS, reordered);
+
 buildPresetList();
+initDefaultHeaders();
 </script>
 </body>
 </html>
